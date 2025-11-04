@@ -4,16 +4,21 @@ This project simulates the coupling of a tilted, elliptical Gaussian beam into a
 
 ## Core Physics
 
-The simulation is based on the **weakly-guiding approximation** ![n_core ≈ n_clad](https://latex.codecogs.com/svg.latex?n_{\text{core}}%20\approx%20n_{\text{clad}}) for a step-index fiber.
+The simulation is based on the **weakly-guiding approximation** $n_{core} ≈ n_{clad}$ for a step-index fiber.
 
-1.  **Guided Modes:** It finds the guided ![LP_{lm}](https://latex.codecogs.com/svg.latex?LP_{lm}) modes by numerically solving the characteristic equation that arises from applying boundary conditions to the scalar Helmholtz equation. This involves solving transcendental equations for each mode's propagation constant.
+1.  **Guided Modes:** It finds the guided $LP_{lm}$ modes by numerically solving the characteristic equation that arises from applying boundary conditions to the scalar Helmholtz equation. This involves solving transcendental equations for each mode's propagation constant.
 
-2.  **Input Beam:** The input field is modeled as a paraxial Gaussian beam. This beam can be elliptical (![w0x ≠ w0y](https://latex.codecogs.com/svg.latex?w_{0x}%20\neq%20w_{0y})), offset from the fiber axis (![x0,y0](https://latex.codecogs.com/svg.latex?x_0,%20y_0)), and tilted using 3D Euler angles (roll, pitch, yaw).
+2.  **Input Beam:** The input field is modeled as a paraxial Gaussian beam. This beam can be elliptical ($w_{0x} ≠ w_{0y}$), offset from the fiber axis ($x_0,y_0$), and tilted using 3D Euler angles (roll, pitch, yaw).
 
-3.  **Modal Projection:** The coupling efficiency is determined by projecting the input electric field onto the basis of the guided mode fields. The complex coefficients are:<br><br>
-![c_lm formula](https://latex.codecogs.com/svg.latex?c_{lm}%20=%20\frac{\iint_A%20\mathbf{E}_{\text{in}}(x,y)\cdot\mathbf{E}_{lm}^*(x,y)\,dA}{\iint_A%20|\mathbf{E}_{lm}(x,y)|^2\,dA})
+3.  **Modal Projection:** The coupling efficiency is determined by projecting the input electric field onto the basis of the guided mode fields. The complex coefficients are:
+$
+\begin{equation}
+c_{lm} = 
+\frac{\iint_A\mathbf{E}_{\text{in}}(x,y)\cdot\mathbf{E}_{lm}^*(x,y)\,dA}{\iint_A|\mathbf{E}_{lm}(x,y)|^2\,dA}
+\end{equation}
+$
 
-The total guided power is the sum of the power in each mode ![P_{lm} prop](https://latex.codecogs.com/svg.latex?(P_{lm}\propto|c_{lm}|^2))
+The total guided power is the sum of the power in each mode $P_{lm}\propto|c_{lm}|^2$.
 
 ## File Structure
 
@@ -73,4 +78,8 @@ Running the script will:
 
 ## Future Improvements (TODO)
 
-* **Normalize Mode Basis:** The current projection coefficients are calculated relative to the power of each mode (`P_mode`). A more standard approach would be to normalize the mode fields ![E_{lm}](https://latex.codecogs.com/svg.latex?\mathbf{E}_{lm}) themselves. This would make the coefficients ![c_{lm}](https://latex.codecogs.com/svg.latex?c_{lm}) more directly interpretable, as ![|c_{lm}|^2](https://latex.codecogs.com/svg.latex?|c_{lm}|^2) would represent the power coupled into the mode.
+* **Normalize Mode Basis:** The current projection coefficients are calculated relative to the power of each mode (`P_mode`). A more standard approach would be to normalize the mode fields $E_{lm}$ themselves. This would make the coefficients $c_{lm}$ more directly interpretable, as $|c_{lm}|^2$ would represent the power coupled into the mode.
+
+* **GIF:** generate a gif which plots the output mode changing with an experimental parameter (ex: tilting)
+
+* **Overlap with LP01:** Compute the overlap integral between LP01 and output.
