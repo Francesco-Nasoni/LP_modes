@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 from scipy.spatial.transform import Rotation as R
 from scipy.optimize import root_scalar
 from scipy.special import jv, kn, jn_zeros
@@ -17,7 +19,7 @@ def diff(l, V, u):
     return left_side(l, u) - right_side(l, V, u)
 
 
-def get_guided_modes(l, m, V, radius, R, PHI, verbose=False):
+def get_guided_modes(l, m, V, radius, R, PHI, dA, verbose=False):
     """
     Compute a single guided LP(l,m) mode for a step-index fiber and return its transverse
     E field component, which can be used as either E_x or E_y
@@ -73,9 +75,11 @@ def get_guided_modes(l, m, V, radius, R, PHI, verbose=False):
 
     if verbose:
         print("\n", f"Mode LP{l}{m}\n", result)
-    
+
     if not result.converged:
-        print(f"Warning: Mode LP{l}{m} is allowed by the V parameter (V={V}), but root finding did not converge.")
+        print(
+            f"Warning: Mode LP{l}{m} is allowed by the V parameter (V={V}), but root finding did not converge."
+        )
         return None
 
     u_lp = result.root
@@ -83,21 +87,23 @@ def get_guided_modes(l, m, V, radius, R, PHI, verbose=False):
 
     B = jv(l, u_lp) / kn(l, w_lp)
 
-    Ey_lp_core = jv(l, u_lp / radius * R)
-    Ey_lp_cladding = B * kn(l, w_lp / radius * R)
+    E_lp_core = jv(l, u_lp / radius * R)
+    E_lp_cladding = B * kn(l, w_lp / radius * R)
 
     # --- Adjust for their respective domains ---
-    Ey_lp_core[R > radius] = 0
-    Ey_lp_cladding[R <= radius] = 0
+    E_lp_core[R > radius] = 0
+    E_lp_cladding[R <= radius] = 0
 
-    Ey_lp_tot = Ey_lp_core + Ey_lp_cladding
+    E_lp_tot = E_lp_core + E_lp_cladding
+
+    P_norm = np.sum(np.abs(E_lp_tot * np.exp(+1j * l * PHI)) ** 2) * dA
 
     result = {
         "l": l,
         "m": m,
         "u": u_lp,
-        "cos": Ey_lp_tot * np.cos(l * PHI),
-        "sin": Ey_lp_tot * np.sin(l * PHI),
+        "p_phi": E_lp_tot * np.exp(+1j * l * PHI) / np.sqrt(P_norm),
+        "m_phi": E_lp_tot * np.exp(-1j * l * PHI) / np.sqrt(P_norm) if l!=0 else 0,
     }
 
     return result
@@ -140,24 +146,15 @@ def get_LP_modes_projection_coefficients(E_input, mode, dA):
     E_input_x = E_input[0]
     E_input_y = E_input[1]
 
-    E_mode_cos = mode.get("cos")
-    E_mode_sin = mode.get("sin")
+    E_mode_p_phi = mode.get("p_phi")
+    E_mode_m_phi = mode.get("m_phi")
 
     # Overlap integrals:
-    overlap_x_cos = np.sum(np.conj(E_mode_cos) * E_input_x) * dA
-    overlap_y_cos = np.sum(np.conj(E_mode_cos) * E_input_y) * dA
-    overlap_x_sin = np.sum(np.conj(E_mode_sin) * E_input_x) * dA
-    overlap_y_sin = np.sum(np.conj(E_mode_sin) * E_input_y) * dA
-
-    # NOTE: np.conj is not necessary since the lp modes are described by  means of their real base, althoughit is there
-    #       for future upgrade in which we consider complex basis
-
-    P_mode = np.sum(np.abs(E_mode_cos) ** 2) * dA
-
-    A_x_cos = overlap_x_cos / P_mode
-    A_y_cos = overlap_y_cos / P_mode
-    A_x_sin = overlap_x_sin / P_mode
-    A_y_sin = overlap_y_sin / P_mode
+    # The denominator is not needed since P=1 for every mode
+    A_x_p_phi = np.sum(np.conj(E_mode_p_phi) * E_input_x) * dA
+    A_y_p_phi = np.sum(np.conj(E_mode_p_phi) * E_input_y) * dA
+    A_x_m_phi = np.sum(np.conj(E_mode_m_phi) * E_input_x) * dA
+    A_y_m_phi = np.sum(np.conj(E_mode_m_phi) * E_input_y) * dA
 
     tol = 1e-10
 
@@ -165,14 +162,48 @@ def get_LP_modes_projection_coefficients(E_input, mode, dA):
         "l": mode.get("l"),
         "m": mode.get("m"),
         "u": mode.get("u"),
-        "P_mode": P_mode,
-        "x_cos": A_x_cos if not np.isclose(A_x_cos, 0, tol) else 0,
-        "y_cos": A_y_cos if not np.isclose(A_y_cos, 0, tol) else 0,
-        "x_sin": A_x_sin if not np.isclose(A_x_sin, 0, tol) else 0,
-        "y_sin": A_y_sin if not np.isclose(A_y_sin, 0, tol) else 0,
+        "x_p_phi": A_x_p_phi if not np.isclose(A_x_p_phi, 0, tol) else 0,
+        "y_p_phi": A_y_p_phi if not np.isclose(A_y_p_phi, 0, tol) else 0,
+        "x_m_phi": A_x_m_phi if not np.isclose(A_x_m_phi, 0, tol) else 0,
+        "y_m_phi": A_y_m_phi if not np.isclose(A_y_m_phi, 0, tol) else 0,
     }
 
     return result
+
+
+def get_complete_guided_field(guided_modes, df_coeff, X, Y):
+
+    E_guided_x = np.zeros_like(X, dtype=complex)
+    E_guided_y = np.zeros_like(Y, dtype=complex)
+    sum_squared_coeff = 0
+
+    for mode in guided_modes:
+        if mode is None:
+            continue
+
+        l = mode["l"]
+        m = mode["m"]
+
+        coeff = df_coeff.loc[l, m]
+
+        E_guided_x_lm = (
+            coeff["x_p_phi"] * mode["p_phi"] + coeff["x_m_phi"] * mode["m_phi"]
+        )
+        E_guided_y_lm = (
+            coeff["y_p_phi"] * mode["p_phi"] + coeff["y_m_phi"] * mode["m_phi"]
+        )
+
+        E_guided_x += E_guided_x_lm
+        E_guided_y += E_guided_y_lm
+
+        sum_squared_coeff += (
+            np.abs(coeff["x_p_phi"]) ** 2
+            + np.abs(coeff["x_m_phi"]) ** 2
+            + np.abs(coeff["y_p_phi"]) ** 2
+            + np.abs(coeff["y_m_phi"]) ** 2
+        )
+
+    return E_guided_x, E_guided_y, sum_squared_coeff
 
 
 def _gaussian_electric_field_alligned(
@@ -288,20 +319,20 @@ def get_tilted_beam_from_incidence(
     euler_alpha,
     euler_beta,
     euler_gamma,
-    **kwargs
+    **kwargs,
 ):
-    
+
     Z_lab = np.full_like(X_lab, z_plane, dtype=float)
 
     P_inc = np.array([x_incidence, y_incidence, z_plane])
 
     R_matrix = R.from_euler("zxy", [euler_alpha, euler_beta, euler_gamma]).as_matrix()
-    
+
     k_vec = R_matrix.T @ np.array([0, 0, 1])
-    
+
     # Waist position
     P_waist = P_inc - dist_to_waist * k_vec
-    
+
     return tilted_gaussian_electric_field(
         X_lab=X_lab,
         Y_lab=Y_lab,
@@ -312,5 +343,77 @@ def get_tilted_beam_from_incidence(
         euler_alpha=euler_alpha,
         euler_beta=euler_beta,
         euler_gamma=euler_gamma,
-        **kwargs
+        **kwargs,
     )
+
+def plot_power_density(
+    I_input,
+    I_guided,
+    axis_ext,
+    radius,
+    CMAP,
+    NORMALIZE_COLOR_PALETTE=True,
+):
+    fig, (ax_left, ax) = plt.subplots(1, 2, figsize=(12, 6))
+
+    if NORMALIZE_COLOR_PALETTE:
+        vmax = max(np.max(I_input), np.max(I_guided))
+    else:
+        vmax = None
+
+    im1 = ax_left.imshow(
+        I_input,
+        extent=[-axis_ext, axis_ext, -axis_ext, axis_ext],
+        origin="lower",
+        cmap=CMAP,
+        aspect="equal",
+        vmin=0,
+        vmax=vmax,
+    )
+    ax_left.set_title("Input power density")
+    ax_left.set_xlabel("x (radius units)")
+    ax_left.set_ylabel("y (radius units)")
+
+    # draw core circle on left image
+    core_circle_left = Circle(
+        (0, 0),
+        radius,
+        facecolor="none",
+        edgecolor="white",
+        linewidth=1.5,
+        linestyle="--",
+        zorder=5,
+    )
+    ax_left.add_patch(core_circle_left)
+
+    cbar1 = fig.colorbar(im1, ax=ax_left)
+    cbar1.set_label("Power density (arb. units)")
+
+
+    im = ax.imshow(
+        I_guided,
+        extent=[-axis_ext, axis_ext, -axis_ext, axis_ext],
+        origin="lower",
+        cmap=CMAP,
+        aspect="equal",
+        vmin=0,
+        vmax=vmax,
+    )
+    ax.set_title("Total guided power density")
+    ax.set_xlabel("x (radius units)")
+    ax.set_ylabel("y (radius units)")
+
+    # draw core circle on right image
+    core_circle_right = Circle(
+        (0, 0),
+        radius,
+        facecolor="none",
+        edgecolor="white",
+        linewidth=1.5,
+        linestyle="--",
+        zorder=5,
+    )
+    ax.add_patch(core_circle_right)
+
+    cbar = fig.colorbar(im, ax=ax)
+    cbar.set_label("Power density (arb. units)")
