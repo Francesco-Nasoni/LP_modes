@@ -103,7 +103,7 @@ def get_guided_modes(l, m, V, radius, R, PHI, dA, verbose=False):
         "m": m,
         "u": u_lp,
         "p_phi": E_lp_tot * np.exp(+1j * l * PHI) / np.sqrt(P_norm),
-        "m_phi": E_lp_tot * np.exp(-1j * l * PHI) / np.sqrt(P_norm) if l!=0 else 0,
+        "m_phi": E_lp_tot * np.exp(-1j * l * PHI) / np.sqrt(P_norm) if l != 0 else 0 + 0j,
     }
 
     return result
@@ -162,10 +162,10 @@ def get_LP_modes_projection_coefficients(E_input, mode, dA):
         "l": mode.get("l"),
         "m": mode.get("m"),
         "u": mode.get("u"),
-        "x_p_phi": A_x_p_phi if not np.isclose(A_x_p_phi, 0, tol) else 0,
-        "y_p_phi": A_y_p_phi if not np.isclose(A_y_p_phi, 0, tol) else 0,
-        "x_m_phi": A_x_m_phi if not np.isclose(A_x_m_phi, 0, tol) else 0,
-        "y_m_phi": A_y_m_phi if not np.isclose(A_y_m_phi, 0, tol) else 0,
+        "x_p_phi": A_x_p_phi if not np.isclose(A_x_p_phi, 0, tol) else 0+0j,
+        "y_p_phi": A_y_p_phi if not np.isclose(A_y_p_phi, 0, tol) else 0+0j,
+        "x_m_phi": A_x_m_phi if not np.isclose(A_x_m_phi, 0, tol) else 0+0j,
+        "y_m_phi": A_y_m_phi if not np.isclose(A_y_m_phi, 0, tol) else 0+0j,
     }
 
     return result
@@ -296,7 +296,7 @@ def tilted_gaussian_electric_field(
     euler_gamma=0.0,
     **kwargs,
 ):
-    R_matrix = R.from_euler("zxy", [euler_alpha, euler_beta, euler_gamma]).as_matrix()
+    R_matrix = R.from_euler("zxy", [euler_alpha, euler_beta, euler_gamma]).as_matrix().T
 
     X_rel = X_lab - x_waist
     Y_rel = Y_lab - y_waist
@@ -328,9 +328,10 @@ def get_tilted_beam_from_incidence(
 
     R_matrix = R.from_euler("zxy", [euler_alpha, euler_beta, euler_gamma]).as_matrix()
 
-    k_vec = R_matrix.T @ np.array([0, 0, 1])
+    # Propagation vector seen from the Lab f.o.r.
+    k_vec = R_matrix @ np.array([0, 0, 1])
 
-    # Waist position
+    # Waist position in the Lab f.o.r.
     P_waist = P_inc - dist_to_waist * k_vec
 
     return tilted_gaussian_electric_field(
@@ -346,6 +347,7 @@ def get_tilted_beam_from_incidence(
         **kwargs,
     )
 
+
 def plot_power_density(
     I_input,
     I_guided,
@@ -354,7 +356,7 @@ def plot_power_density(
     CMAP,
     NORMALIZE_COLOR_PALETTE=True,
 ):
-    fig, (ax_left, ax) = plt.subplots(1, 2, figsize=(12, 6))
+    fig, (ax_left, ax) = plt.subplots(1, 2, figsize=(12, 5))
 
     if NORMALIZE_COLOR_PALETTE:
         vmax = max(np.max(I_input), np.max(I_guided))
@@ -388,7 +390,6 @@ def plot_power_density(
 
     cbar1 = fig.colorbar(im1, ax=ax_left)
     cbar1.set_label("Power density (arb. units)")
-
 
     im = ax.imshow(
         I_guided,

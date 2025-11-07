@@ -15,6 +15,13 @@ from LP_projection_functions import (
     plot_power_density,
 )
 
+from propagation import (
+    fiber_propagation,
+    free_propagate_asm_scalar,
+)
+
+from graph import plot_summary_figure
+
 # --------------------------------------- PARAMETERS ----------------------------------------------
 # -------------------------------------------------------------------------------------------------
 # NOTE: all the length are measured in units of fiber radius
@@ -22,32 +29,35 @@ from LP_projection_functions import (
 # --- Various Parameters ---
 FIBER_V = 6.3
 MODES_TO_TEST = [(0, 1), (0, 2), (1, 1), (1, 2), (2, 1), (3, 1)]
+FIBER_N1 = 1.4
+FIBER_LENGTH = 1e4
+DIST_FROM_FIBER = 100
 
 # --- Injected field parameters ---
-LAMBDA = 0.044                  # Wavelength of the injected beam
-DIST_TO_WAIST = 5               # Distance from the beam waist to the fiber input plane
-W0_X = 1                        # Beam waist size along the x-axis
-W0_Y = 1.2                      # Beam waist size along the y-axis
+LAMBDA = 0.0426                 # Wavelength of the injected beam
+DIST_TO_WAIST = 0               # Distance from the beam waist to the fiber input plane
+W0_X = 0.8                      # Beam waist size along the x-axis
+W0_Y = 1                        # Beam waist size along the y-axis
 X0 = 0.1                        # x-coordinate of the beam's incidence point on the fiber input plane
-Y0 = -0.2                       # y-coordinate of the beam's incidence point on the fiber input plane
+Y0 = 0.1                        # y-coordinate of the beam's incidence point on the fiber input plane
 ROLL_ANGLE = 0 * np.pi / 180    # Roll angle of the beam (rotation about the z-axis, in radians)
-PITCH_ANGLE = 1 * np.pi / 180   # Pitch angle of the beam (tilt in the x-z plane, in radians)
-YAW_ANGLE = 0.5 * np.pi / 180   # Yaw angle of the beam (tilt in the y-z plane, in radians)
+PITCH_ANGLE = 0 * np.pi / 180   # Pitch angle of the beam (tilt in the x-z plane, in radians)
+YAW_ANGLE = 0 * np.pi / 180     # Yaw angle of the beam (tilt in the y-z plane, in radians)
 POLARIZATION_ANGLE = np.pi/4    # Polarization angle of the beam (angle of the electric field vector, in radians)
 
 # --- Grid stuff ---
-AXIS_SIZE = 1.5
-GRID_SIZE = 500
+AXIS_SIZE = 3.5
+GRID_SIZE = 800
 
 # --- Visualization stuff ---
 # Colormap name passed to matplotlib for the power density plots
-# First parameter is the color map name ("gnuplot2" recommanded),
-# secod parameter is the number of color
+# First parameter is the color map name ("gnuplot2" recommended),
+# second parameter is the number of colors
 CMAP = plt.get_cmap('gnuplot2', 20)
 
 # If True, use a common color scale (same vmax) for input field and guided field plots
 # to allow direct visual comparison. If False, each plot scales independently.
-NORMALIZE_COLOR_PALETTE = True
+NORMALIZE_COLOR_PALETTE = False
 
 # -------------------------------------------------------------------------------------------------
 # -------------------------------------------------------------------------------------------------
@@ -61,7 +71,8 @@ NA = LAMBDA * FIBER_V / (2 * np.pi * radius)
 total_tilt = np.arccos(np.cos(PITCH_ANGLE) * np.cos(YAW_ANGLE))
 
 print("\n", "ANGLE STUFF", "\n" + "*" * 50)
-print(f"Fiber numerical aperture = {NA * (180/np.pi):.2f}°")
+print(f"Fiber NA = {NA:.2f}")
+print(f"Fiber acceptance angle = {np.arcsin(NA) * (180/np.pi):.2f}°")
 print(f"Total tilt setted = {total_tilt * (180/np.pi):.2f}°")
 print("*" * 50 + "\n")
 
@@ -153,14 +164,75 @@ print("*" * 50 + "\n")
 
 
 # --- VISUALIZATION ---
-plot_power_density(
-    I_input,
-    I_guided,
-    axis_ext,
-    radius,
-    CMAP,
-    NORMALIZE_COLOR_PALETTE=NORMALIZE_COLOR_PALETTE,
+# plot_power_density(
+#     I_input,
+#     I_guided,
+#     axis_ext,
+#     radius,
+#     CMAP,
+#     NORMALIZE_COLOR_PALETTE=NORMALIZE_COLOR_PALETTE,
+# )
+
+
+df_coeff_fib_prop = fiber_propagation(
+    df_coeff,
+    n1=FIBER_N1,
+    a=radius,
+    lam=LAMBDA,
+    z_fiber=FIBER_LENGTH,
 )
 
-plt.tight_layout()
+# --- RECONSTRUCT THE GUIDED ELECTRIC FIELD AFTER FIBER PROPAGATION ---
+E_guided_x_prop, E_guided_y_prop, _ = get_complete_guided_field(
+    guided_modes, df_coeff_fib_prop, X, Y
+)
+
+I_guided_prop = np.abs(E_guided_x_prop) ** 2 + np.abs(E_guided_y_prop) ** 2
+
+
+# --- PROPAGATE THE FIELD USING ASM TO DIST_FROM_FIBER ---
+E_propagated_x = free_propagate_asm_scalar(E_guided_x_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA)
+E_propagated_y = free_propagate_asm_scalar(E_guided_y_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA)
+
+I_propagated = np.abs(E_propagated_x) ** 2 + np.abs(E_propagated_y) ** 2
+
+
+
+# --- VISUALIZATION OF THE GUIDED FIELD AFTER FIBER PROPAGATION AND PROPAGATED FIELD ---
+
+
+plot_summary_figure(
+    I_input, I_guided, I_guided_prop, I_propagated,
+    P_input_core, P_guided_core, P_input, P_guided, eta,
+    df_coeff, df_coeff_fib_prop,
+    axis_ext, radius, CMAP, DIST_FROM_FIBER,
+    normalize_palette=NORMALIZE_COLOR_PALETTE
+)
+
+
+# vmax = max(np.max(I_input), np.max(I_guided))
+# plt.figure(figsize=(12, 5))
+
+# # Plot the guided field intensity at the fiber output face
+# plt.subplot(1, 2, 1)
+# plt.imshow(I_guided_prop, extent=(-axis_ext, axis_ext, -axis_ext, axis_ext), origin="lower", aspect="equal", cmap=CMAP)
+# plt.colorbar(label="Intensity")
+# plt.title("Guided Field Intensity at the Fiber Output Face")
+# plt.xlabel("X")
+# plt.ylabel("Y")
+# fiber_circle = Circle((0, 0), radius, color='white', fill=False, linestyle='--', linewidth=1.5)
+# plt.gca().add_patch(fiber_circle)
+
+# # Plot the field intensity after propagation to z_out
+# plt.subplot(1, 2, 2)
+# plt.imshow(I_propagated, extent=(-axis_ext, axis_ext, -axis_ext, axis_ext), origin="lower", aspect="equal", cmap=CMAP)
+# plt.colorbar(label="Intensity")
+# plt.title(f"Field Intensity After Propagation to z = {DIST_FROM_FIBER}")
+# plt.xlabel("X")
+# plt.ylabel("Y")
+# fiber_circle = Circle((0, 0), radius, color='white', fill=False, linestyle='--', linewidth=1.5)
+# plt.gca().add_patch(fiber_circle)
+
+
+#plt.tight_layout()
 plt.show()
