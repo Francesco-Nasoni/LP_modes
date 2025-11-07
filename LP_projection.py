@@ -10,8 +10,17 @@ import pandas as pd
 from LP_projection_functions import (
     get_guided_modes,
     get_LP_modes_projection_coefficients,
+    get_complete_guided_field,
     get_tilted_beam_from_incidence,
+    plot_power_density,
 )
+
+from propagation import (
+    fiber_propagation,
+    free_propagate_asm_scalar,
+)
+
+from graph import plot_summary_figure
 
 # --------------------------------------- PARAMETERS ----------------------------------------------
 # -------------------------------------------------------------------------------------------------
@@ -20,27 +29,30 @@ from LP_projection_functions import (
 # --- Various Parameters ---
 FIBER_V = 6.3
 MODES_TO_TEST = [(0, 1), (0, 2), (1, 1), (1, 2), (2, 1), (3, 1)]
+FIBER_N1 = 1.4
+FIBER_LENGTH = 1e4
+DIST_FROM_FIBER = 100
 
 # --- Injected field parameters ---
-LAMBDA = 0.044                  # Wavelength of the injected beam
-DIST_TO_WAIST = 5               # Distance from the beam waist to the fiber input plane
-W0_X = 1                        # Beam waist size along the x-axis
+LAMBDA = 0.0426                 # Wavelength of the injected beam
+DIST_TO_WAIST = 0               # Distance from the beam waist to the fiber input plane
+W0_X = 0.8                      # Beam waist size along the x-axis
 W0_Y = 1                        # Beam waist size along the y-axis
-X0 = 0.2                        # x-coordinate of the beam's incidence point on the fiber input plane
-Y0 = -0.2                       # y-coordinate of the beam's incidence point on the fiber input plane
+X0 = 0.1                        # x-coordinate of the beam's incidence point on the fiber input plane
+Y0 = 0.1                        # y-coordinate of the beam's incidence point on the fiber input plane
 ROLL_ANGLE = 0 * np.pi / 180    # Roll angle of the beam (rotation about the z-axis, in radians)
-PITCH_ANGLE = 1 * np.pi / 180   # Pitch angle of the beam (tilt in the x-z plane, in radians)
-YAW_ANGLE = 0.5 * np.pi / 180   # Yaw angle of the beam (tilt in the y-z plane, in radians)
+PITCH_ANGLE = 0 * np.pi / 180   # Pitch angle of the beam (tilt in the x-z plane, in radians)
+YAW_ANGLE = 0 * np.pi / 180     # Yaw angle of the beam (tilt in the y-z plane, in radians)
 POLARIZATION_ANGLE = np.pi/4    # Polarization angle of the beam (angle of the electric field vector, in radians)
 
 # --- Grid stuff ---
-AXIS_SIZE = 1.5
-GRID_SIZE = 500
+AXIS_SIZE = 3.5
+GRID_SIZE = 800
 
 # --- Visualization stuff ---
 # Colormap name passed to matplotlib for the power density plots
-# First parameter is the color map name ("gnuplot2" recommanded),
-# secod parameter is the number of color
+# First parameter is the color map name ("gnuplot2" recommended),
+# second parameter is the number of colors
 CMAP = plt.get_cmap('gnuplot2', 20)
 
 # If True, use a common color scale (same vmax) for input field and guided field plots
@@ -59,7 +71,8 @@ NA = LAMBDA * FIBER_V / (2 * np.pi * radius)
 total_tilt = np.arccos(np.cos(PITCH_ANGLE) * np.cos(YAW_ANGLE))
 
 print("\n", "ANGLE STUFF", "\n" + "*" * 50)
-print(f"Fiber numerical aperture = {NA * (180/np.pi):.2f}°")
+print(f"Fiber NA = {NA:.2f}")
+print(f"Fiber acceptance angle = {np.arcsin(NA) * (180/np.pi):.2f}°")
 print(f"Total tilt setted = {total_tilt * (180/np.pi):.2f}°")
 print("*" * 50 + "\n")
 
@@ -69,14 +82,14 @@ x = np.linspace(-axis_ext, axis_ext, GRID_SIZE)
 y = np.linspace(-axis_ext, axis_ext, GRID_SIZE)
 X, Y = np.meshgrid(x, y)
 
-# --- Area of a pixel for the integrals ---
-dA = (axis_ext * 2 / GRID_SIZE) ** 2
-
 # --- Ploar coordinates ---
 R = np.sqrt(X**2 + Y**2)
 PHI = np.arctan2(Y, X)
 
+# --- Differential Area Element ---
+dA = (axis_ext * 2 / GRID_SIZE) ** 2
 
+# --- DEFINE THE INPUT ELECTRIC FIELD AS A TILTED GAUSSIAN BEAM ---
 E_input = get_tilted_beam_from_incidence(
     X,
     Y,
@@ -94,12 +107,12 @@ E_input = get_tilted_beam_from_incidence(
     polarization_angle=POLARIZATION_ANGLE,
 )
 
-
+# --- COMPUTE THE GUIDED MODES AND THEIR PROJECTION COEFFICIENTS ON THE INPUT FIELD ---
 guided_modes = []
 coefficients = []
 for l, m in MODES_TO_TEST:
 
-    mode = get_guided_modes(l, m, FIBER_V, radius, R, PHI)
+    mode = get_guided_modes(l, m, FIBER_V, radius, R, PHI, dA)
 
     if mode is not None:
         guided_modes.append(mode)
@@ -111,31 +124,10 @@ for l, m in MODES_TO_TEST:
 df_coeff = pd.DataFrame(coefficients)
 df_coeff.set_index(["l", "m"], inplace=True)
 
-# --- CONSTRUCT THE GUIDED FIELD FROM LP MODES AND COEFFICIENTS ---
-E_guided_x = np.zeros_like(X, dtype=complex)
-E_guided_y = np.zeros_like(X, dtype=complex)
-sq_sum = 0
-
-for mode in guided_modes:
-    if mode is None:
-        continue
-    l = mode["l"]
-    m = mode["m"]
-
-    coeff = df_coeff.loc[l, m]
-
-    E_guided_x_lm = coeff["x_cos"] * mode["cos"] + coeff["x_sin"] * mode["sin"]
-    E_guided_y_lm = coeff["y_cos"] * mode["cos"] + coeff["y_sin"] * mode["sin"]
-
-    E_guided_x += E_guided_x_lm
-    E_guided_y += E_guided_y_lm
-
-    sq_sum += coeff["P_mode"] * (
-        np.abs(coeff["x_cos"]) ** 2
-        + np.abs(coeff["x_sin"]) ** 2
-        + np.abs(coeff["y_cos"]) ** 2
-        + np.abs(coeff["y_sin"]) ** 2
-    )
+# --- RECONSTRUCT THE GUIDED ELECTRIC FIELD USING LP MODES AND THEIR PROJECTION COEFFICIENTS ---
+E_guided_x, E_guided_y, sum_squared_coeff = get_complete_guided_field(
+    guided_modes, df_coeff, X, Y
+)
 
 
 # Get the power of the guided field and the coupling coefficient
@@ -144,25 +136,26 @@ E_input_y = E_input[1]
 I_guided = np.abs(E_guided_x) ** 2 + np.abs(E_guided_y) ** 2
 I_input = np.abs(E_input_x) ** 2 + np.abs(E_input_y) ** 2
 
-P_input_core = np.sum(I_input[R < radius]) * dA
-P_guided_core = np.sum(I_guided[R < radius]) *dA
+P_input_core = np.sum(I_input[R <= radius]) * dA
+P_guided_core = np.sum(I_guided[R <= radius]) * dA
 P_input = np.sum(I_input) * dA
 P_guided = np.sum(I_guided) * dA
 
 eta = P_guided / P_input if P_input != 0 else 0.0
 
+coeff_power_transport = (np.abs(df_coeff.iloc[:, 1:]) ** 2) / P_guided
+
 
 # --- TERMINAL OUTPUT ---
 print("\n", "SQUARED MODULUS OF COEFFICIENTS", "\n" + "*" * 50)
 print(
-    ((np.abs(df_coeff.iloc[:, 2:]) ** 2) * 100).to_string(
+    (coeff_power_transport * 100).to_string(
         float_format=lambda x: f"{x:.1f}", justify="center", col_space=6
     )
 )
 print("*" * 50)
-
 print("\n\n", "SUMMARY", "\n" + "*" * 50)
-print(f"Sum of squared A coeff = {sq_sum:.2f}")
+print(f"Sum of squared A coeff = {sum_squared_coeff:.2f}")
 print(f"P_input by the core = {P_input_core:.3f}")
 print(f"P_guided by the core = {P_guided_core:.3f}")
 print(f"P_input = {P_input:.2f}")
@@ -171,70 +164,51 @@ print(f"Coupling efficiency = {eta:.3f}")
 print("*" * 50 + "\n")
 
 
+df_coeff_fib_prop = fiber_propagation(
+    df_coeff,
+    n1=FIBER_N1,
+    a=radius,
+    lam=LAMBDA,
+    z_fiber=FIBER_LENGTH,
+)
+
+# --- RECONSTRUCT THE GUIDED ELECTRIC FIELD AFTER FIBER PROPAGATION ---
+E_guided_x_prop, E_guided_y_prop, _ = get_complete_guided_field(
+    guided_modes, df_coeff_fib_prop, X, Y
+)
+
+I_guided_prop = np.abs(E_guided_x_prop) ** 2 + np.abs(E_guided_y_prop) ** 2
+
+
+# --- PROPAGATE THE FIELD USING ASM TO z=DIST_FROM_FIBER ---
+E_propagated_x = free_propagate_asm_scalar(
+    E_guided_x_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA
+)
+E_propagated_y = free_propagate_asm_scalar(
+    E_guided_y_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA
+)
+
+I_propagated = np.abs(E_propagated_x) ** 2 + np.abs(E_propagated_y) ** 2
+
 
 # --- VISUALIZATION ---
-fig, (ax_left, ax) = plt.subplots(1, 2, figsize=(12, 6))
-
-if NORMALIZE_COLOR_PALETTE:
-    vmax = max(np.max(I_input), np.max(I_guided))
-else:
-    vmax = None
-
-im1 = ax_left.imshow(
+plot_summary_figure(
     I_input,
-    extent=[-axis_ext, axis_ext, -axis_ext, axis_ext],
-    origin="lower",
-    cmap=CMAP,
-    aspect="equal",
-    vmin=0,
-    vmax=vmax,
-)
-ax_left.set_title("Input power density")
-ax_left.set_xlabel("x (radius units)")
-ax_left.set_ylabel("y (radius units)")
-
-# draw core circle on left image
-core_circle_left = Circle(
-    (0, 0),
-    radius,
-    facecolor="none",
-    edgecolor="white",
-    linewidth=1.5,
-    linestyle="--",
-    zorder=5,
-)
-ax_left.add_patch(core_circle_left)
-
-cbar1 = fig.colorbar(im1, ax=ax_left)
-cbar1.set_label("Power density (arb. units)")
-
-
-im = ax.imshow(
     I_guided,
-    extent=[-axis_ext, axis_ext, -axis_ext, axis_ext],
-    origin="lower",
-    cmap=CMAP,
-    aspect="equal",
-    vmin=0,
-    vmax=vmax,
-)
-ax.set_title("Total guided power density")
-ax.set_xlabel("x (radius units)")
-ax.set_ylabel("y (radius units)")
-
-# draw core circle on right image
-core_circle_right = Circle(
-    (0, 0),
+    I_guided_prop,
+    I_propagated,
+    P_input_core,
+    P_guided_core,
+    P_input,
+    P_guided,
+    eta,
+    df_coeff,
+    df_coeff_fib_prop,
+    axis_ext,
     radius,
-    facecolor="none",
-    edgecolor="white",
-    linewidth=1.5,
-    linestyle="--",
-    zorder=5,
+    CMAP,
+    DIST_FROM_FIBER,
+    normalize_palette=NORMALIZE_COLOR_PALETTE,
 )
-ax.add_patch(core_circle_right)
 
-cbar = fig.colorbar(im, ax=ax)
-cbar.set_label("Power density (arb. units)")
-plt.tight_layout()
 plt.show()
