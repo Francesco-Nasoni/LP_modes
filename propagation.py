@@ -1,5 +1,5 @@
 import numpy as np
-
+import pandas as pd
 
 def fiber_propagation(df_coeff, n1, a, lam, z_fiber):
     """
@@ -71,7 +71,7 @@ def free_propagate_asm_scalar(E_component_in, z, L, lambda_0):
     return E_out
 
 
-def free_propagate_asm_scalar_aliasing_robust(E_component_in, z, L_orig, lambda_0, NA):
+def free_propagate_asm_scalar_aliasing_robust(E_component_in, z, L_orig, lambda_0, NA, Rz_factor = 1):
     """
     Perform aliasing-robust scalar angular spectrum method (ASM) free-space 
     propagation of a 2D complex field. This method pads the input field to 
@@ -91,15 +91,17 @@ def free_propagate_asm_scalar_aliasing_robust(E_component_in, z, L_orig, lambda_
     """
 
     N_orig = E_component_in.shape[0]
-    dx_orig = L_orig / N_orig
+    dx = L_orig / N_orig
 
-    R_z = NA * z
+    R_z = NA * z * Rz_factor
     L_pad = max(L_orig, 2*R_z)
 
     # maintain approximately same dx if possible
     # here the maximum 1e4x1e4 require peak 9.6GB of ram
-    N_pad = int(min(L_pad/dx_orig, 1e4))
-    dx_pad = L_pad/N_pad
+    N_pad = int(L_pad/dx)
+    if N_pad > 1.1e4:
+        print(f"Propagation distance z={z} requires too many resources.")
+        return None, None
 
     # Find the center index
     start_idx = (N_pad - N_orig) // 2
@@ -109,10 +111,6 @@ def free_propagate_asm_scalar_aliasing_robust(E_component_in, z, L_orig, lambda_
     E_in_padded = np.zeros((N_pad, N_pad), dtype=complex)
     E_in_padded[start_idx:end_idx, start_idx:end_idx] = E_component_in
 
-    # rescale amplitude according to area rescale
-    scaling_factor = dx_orig / dx_pad
-    E_in_padded *= scaling_factor
-
     E_out_padded = free_propagate_asm_scalar(
         E_in_padded, 
         z, 
@@ -121,10 +119,10 @@ def free_propagate_asm_scalar_aliasing_robust(E_component_in, z, L_orig, lambda_
     )
 
     # Crop the output field to the region of interest
-    crop_start_idx = max(0, (N_pad // 2) - int(L_pad/2 / dx_pad))
-    crop_end_idx = min(N_pad, (N_pad // 2) + int(L_pad/2 / dx_pad))
+    crop_start_idx = max(0, (N_pad // 2) - int(L_pad/2 / dx))
+    crop_end_idx = min(N_pad, (N_pad // 2) + int(L_pad/2 / dx))
 
     E_out_cropped = E_out_padded[crop_start_idx:crop_end_idx, crop_start_idx:crop_end_idx]
-    L_out = E_out_cropped.shape[0] * dx_pad
+    L_out = E_out_cropped.shape[0] * dx
 
     return E_out_cropped, L_out/2

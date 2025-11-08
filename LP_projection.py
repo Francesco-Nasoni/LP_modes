@@ -30,7 +30,7 @@ FIBER_V = 6.3
 MODES_TO_TEST = [(0, 1), (0, 2), (1, 1), (1, 2), (2, 1), (3, 1)]
 FIBER_N1 = 1.4
 FIBER_LENGTH = 1e4
-DIST_FROM_FIBER = 50
+DIST_FROM_FIBER = 900
 
 # --- Injected field parameters ---
 LAMBDA = 0.0426                 # Wavelength of the injected beam
@@ -46,7 +46,7 @@ POLARIZATION_ANGLE = 0    # Polarization angle of the beam (angle of the electri
 
 # --- Grid stuff ---
 AXIS_SIZE = 1.5
-GRID_SIZE = 500
+GRID_SIZE = 400
 
 # --- Visualization stuff ---
 # Colormap name passed to matplotlib for the power density plots
@@ -181,19 +181,23 @@ I_guided_prop = np.abs(E_guided_x_prop) ** 2 + np.abs(E_guided_y_prop) ** 2
 
 # --- PROPAGATE THE FIELD USING ASM TO z=DIST_FROM_FIBER ---
 E_propagated_x, prop_axis_ext = free_propagate_asm_scalar_aliasing_robust(
-    E_guided_x_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA
+    E_guided_x_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA,
 )
 E_propagated_y, _ = free_propagate_asm_scalar_aliasing_robust(
-    E_guided_y_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA
+    E_guided_y_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA,
 )
 
-I_propagated = np.abs(E_propagated_x) ** 2 + np.abs(E_propagated_y) ** 2
+if E_propagated_x is not None:
+    I_propagated = np.abs(E_propagated_x) ** 2 + np.abs(E_propagated_y) ** 2
 
 
-dA_prop = (2 * prop_axis_ext / E_propagated_x.shape[0])**2
-print("\n", "PROPAGATED FIELD POWER", "\n" + "*" * 50)
-print(f"Power of the propagated field = {np.sum(I_propagated) * dA_prop:.3f}")
-print("*" * 50 + "\n")
+    dA_prop = (2 * prop_axis_ext / E_propagated_x.shape[0])**2
+    print("\n", "PROPAGATED FIELD POWER", "\n" + "*" * 50)
+    print(f"Power of the propagated field = {np.sum(I_propagated) * dA_prop:.3f}")
+    print("*" * 50 + "\n")
+else:
+    I_propagated = np.zeros_like(np.real(E_guided_x_prop))
+    prop_axis_ext = axis_ext
 
 # --- VISUALIZATION ---
 plot_summary_figure(
