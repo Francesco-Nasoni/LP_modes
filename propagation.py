@@ -69,3 +69,62 @@ def free_propagate_asm_scalar(E_component_in, z, L, lambda_0):
     E_out = np.fft.ifft2(A_out)
 
     return E_out
+
+
+def free_propagate_asm_scalar_aliasing_robust(E_component_in, z, L_orig, lambda_0, NA):
+    """
+    Perform aliasing-robust scalar angular spectrum method (ASM) free-space 
+    propagation of a 2D complex field. This method pads the input field to 
+    reduce aliasing effects during propagation.
+
+    Parameters:
+        E_component_in (np.ndarray): Input 2D complex field.
+        z (float): Propagation distance.
+        L_orig (float): Original physical size of the input field.
+        lambda_0 (float): Wavelength of the light.
+        NA (float): Numerical aperture.
+
+    Returns:
+        tuple: 
+            - E_out_cropped (np.ndarray): Cropped output 2D complex field.
+            - float: Half of the physical size of the output field.
+    """
+
+    N_orig = E_component_in.shape[0]
+    dx_orig = L_orig / N_orig
+
+    R_z = NA * z
+    L_pad = max(L_orig, 2*R_z)
+
+    # maintain approximately same dx if possible
+    # here the maximum 1e4x1e4 require peak 9.6GB of ram
+    N_pad = int(min(L_pad/dx_orig, 1e4))
+    dx_pad = L_pad/N_pad
+
+    # Find the center index
+    start_idx = (N_pad - N_orig) // 2
+    end_idx = start_idx + N_orig
+
+    # Create the padded field
+    E_in_padded = np.zeros((N_pad, N_pad), dtype=complex)
+    E_in_padded[start_idx:end_idx, start_idx:end_idx] = E_component_in
+
+    # rescale amplitude according to area rescale
+    scaling_factor = dx_orig / dx_pad
+    E_in_padded *= scaling_factor
+
+    E_out_padded = free_propagate_asm_scalar(
+        E_in_padded, 
+        z, 
+        L_pad,
+        lambda_0
+    )
+
+    # Crop the output field to the region of interest
+    crop_start_idx = max(0, (N_pad // 2) - int(L_pad/2 / dx_pad))
+    crop_end_idx = min(N_pad, (N_pad // 2) + int(L_pad/2 / dx_pad))
+
+    E_out_cropped = E_out_padded[crop_start_idx:crop_end_idx, crop_start_idx:crop_end_idx]
+    L_out = E_out_cropped.shape[0] * dx_pad
+
+    return E_out_cropped, L_out/2
