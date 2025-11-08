@@ -105,7 +105,7 @@ def free_propagate_asm_scalar_aliasing_robust(E_component_in, z, L_orig, lambda_
     start_idx = (N_pad - N_orig) // 2
     end_idx = start_idx + N_orig
 
-    # Create the padded field
+    # --- Create the padded field ---
     E_in_padded = np.zeros((N_pad, N_pad), dtype=complex)
     E_in_padded[start_idx:end_idx, start_idx:end_idx] = E_component_in
 
