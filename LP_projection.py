@@ -30,7 +30,7 @@ FIBER_V = 6.3
 MODES_TO_TEST = [(0, 1), (0, 2), (1, 1), (1, 2), (2, 1), (3, 1)]
 FIBER_N1 = 1.4
 FIBER_LENGTH = 1e4
-DIST_FROM_FIBER = 900
+DIST_FROM_FIBER = 1000
 
 # --- Injected field parameters ---
 LAMBDA = 0.0426                 # Wavelength of the injected beam
@@ -45,8 +45,8 @@ YAW_ANGLE = 0.2 * np.pi / 180     # Yaw angle of the beam (tilt in the y-z plane
 POLARIZATION_ANGLE = 0    # Polarization angle of the beam (angle of the electric field vector, in radians)
 
 # --- Grid stuff ---
-AXIS_SIZE = 1.5
-GRID_SIZE = 400
+AXIS_SIZE = 1.2
+GRID_SIZE = 300
 
 # --- Visualization stuff ---
 # Colormap name passed to matplotlib for the power density plots

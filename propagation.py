@@ -99,8 +99,8 @@ def free_propagate_asm_scalar_aliasing_robust(E_component_in, z, L_orig, lambda_
     # maintain approximately same dx if possible
     # here the maximum 1e4x1e4 require peak 9.6GB of ram
     N_pad = int(L_pad/dx)
-    if N_pad > 1.1e4:
-        print(f"Propagation distance z={z} requires too many resources.")
+    if N_pad > 1.2e4:
+        print(f"Propagation distance z={z} requires too many resources (N_pad = {N_pad})")
         return None, None
 
     # Find the center index
