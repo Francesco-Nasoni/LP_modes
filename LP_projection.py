@@ -12,12 +12,11 @@ from LP_projection_functions import (
     get_LP_modes_projection_coefficients,
     get_complete_guided_field,
     get_tilted_beam_from_incidence,
-    plot_power_density,
 )
 
 from propagation import (
     fiber_propagation,
-    free_propagate_asm_scalar,
+    free_propagate_asm_scalar_aliasing_robust,
 )
 
 from graph import plot_summary_figure
@@ -31,23 +30,23 @@ FIBER_V = 6.3
 MODES_TO_TEST = [(0, 1), (0, 2), (1, 1), (1, 2), (2, 1), (3, 1)]
 FIBER_N1 = 1.4
 FIBER_LENGTH = 1e4
-DIST_FROM_FIBER = 100
+DIST_FROM_FIBER = 1000
 
 # --- Injected field parameters ---
 LAMBDA = 0.0426                 # Wavelength of the injected beam
 DIST_TO_WAIST = 0               # Distance from the beam waist to the fiber input plane
-W0_X = 0.8                      # Beam waist size along the x-axis
-W0_Y = 1                        # Beam waist size along the y-axis
-X0 = 0.1                        # x-coordinate of the beam's incidence point on the fiber input plane
-Y0 = 0.1                        # y-coordinate of the beam's incidence point on the fiber input plane
+W0_X = 0.65                      # Beam waist size along the x-axis
+W0_Y = 0.65                        # Beam waist size along the y-axis
+X0 = 0                        # x-coordinate of the beam's incidence point on the fiber input plane
+Y0 = 0                        # y-coordinate of the beam's incidence point on the fiber input plane
 ROLL_ANGLE = 0 * np.pi / 180    # Roll angle of the beam (rotation about the z-axis, in radians)
 PITCH_ANGLE = 0 * np.pi / 180   # Pitch angle of the beam (tilt in the x-z plane, in radians)
 YAW_ANGLE = 0 * np.pi / 180     # Yaw angle of the beam (tilt in the y-z plane, in radians)
 POLARIZATION_ANGLE = np.pi/4    # Polarization angle of the beam (angle of the electric field vector, in radians)
 
 # --- Grid stuff ---
-AXIS_SIZE = 3.5
-GRID_SIZE = 800
+AXIS_SIZE = 1.5
+GRID_SIZE = 500
 
 # --- Visualization stuff ---
 # Colormap name passed to matplotlib for the power density plots
@@ -57,7 +56,7 @@ CMAP = plt.get_cmap('gnuplot2', 20)
 
 # If True, use a common color scale (same vmax) for input field and guided field plots
 # to allow direct visual comparison. If False, each plot scales independently.
-NORMALIZE_COLOR_PALETTE = True
+NORMALIZE_COLOR_PALETTE = False
 
 # -------------------------------------------------------------------------------------------------
 # -------------------------------------------------------------------------------------------------
@@ -181,15 +180,20 @@ I_guided_prop = np.abs(E_guided_x_prop) ** 2 + np.abs(E_guided_y_prop) ** 2
 
 
 # --- PROPAGATE THE FIELD USING ASM TO z=DIST_FROM_FIBER ---
-E_propagated_x = free_propagate_asm_scalar(
-    E_guided_x_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA
+E_propagated_x, prop_axis_ext = free_propagate_asm_scalar_aliasing_robust(
+    E_guided_x_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA
 )
-E_propagated_y = free_propagate_asm_scalar(
-    E_guided_y_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA
+E_propagated_y, _ = free_propagate_asm_scalar_aliasing_robust(
+    E_guided_y_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA
 )
 
 I_propagated = np.abs(E_propagated_x) ** 2 + np.abs(E_propagated_y) ** 2
 
+
+dA_prop = (2 * prop_axis_ext / E_propagated_x.shape[0])**2
+print("\n", "PROPAGATED FIELD POWER", "\n" + "*" * 50)
+print(f"Power of the propagated field = {np.sum(I_propagated) * dA_prop:.3f}")
+print("*" * 50 + "\n")
 
 # --- VISUALIZATION ---
 plot_summary_figure(
@@ -204,6 +208,7 @@ plot_summary_figure(
     eta,
     df_coeff,
     df_coeff_fib_prop,
+    prop_axis_ext,
     axis_ext,
     radius,
     CMAP,

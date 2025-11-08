@@ -15,6 +15,7 @@ def plot_summary_figure(
     eta,
     df_coeff_input,
     df_coeff_output,
+    prop_axis_ext,
     axis_ext,
     radius,
     CMAP,
@@ -40,11 +41,11 @@ def plot_summary_figure(
     # --- Share axes for intensity plots ---
     ax_guided.sharex(ax_in)
     ax_out.sharex(ax_in)
-    ax_propagated.sharex(ax_in)
+    #ax_propagated.sharex(ax_in)
 
     ax_guided.sharey(ax_in)
     ax_out.sharey(ax_in)
-    ax_propagated.sharey(ax_in)
+    #ax_propagated.sharey(ax_in)
 
     # --- Base Image Arguments ---
     im_args = {
@@ -167,7 +168,16 @@ def plot_summary_figure(
     ax_out.set_ylabel("y (radius units)")
 
     # Propagated Intensity
-    ax_propagated.imshow(I_propagated, **im_args)
+    #ax_propagated.imshow(I_propagated, **im_args)
+    ax_propagated.imshow(
+        I_propagated,
+        origin="lower",
+        cmap=CMAP,
+        aspect="equal",
+        vmin=im_args.get("vmin"),
+        vmax=im_args.get("vmax"),
+        extent=[-prop_axis_ext, prop_axis_ext, -prop_axis_ext, prop_axis_ext],
+    )
     ax_propagated.set_title(f"Propagated Intensity (z=L+{DIST_FROM_FIBER})")
     ax_propagated.set_xlabel("x (radius units)")
 
@@ -209,8 +219,6 @@ def plot_summary_figure(
         table_out.auto_set_font_size(False)
         table_out.set_fontsize(9)
         table_out.scale(1.0, 1.2)
-        # Position table
-        # table_out.set_bbox([0.0, 0.0, 1.0, 0.85]) # <-- REMOVED: This line caused the error
 
     except Exception as e:
         ax_summary_out.text(
@@ -264,3 +272,75 @@ def plot_summary_figure(
         cbar_propagated.set_label(None)  # Remove label as requested
 
     return fig, axes
+
+
+def plot_power_density(
+    I_input,
+    I_guided,
+    axis_ext,
+    radius,
+    CMAP,
+    NORMALIZE_COLOR_PALETTE=True,
+):
+    fig, (ax_left, ax) = plt.subplots(1, 2, figsize=(12, 5))
+
+    if NORMALIZE_COLOR_PALETTE:
+        vmax = max(np.max(I_input), np.max(I_guided))
+    else:
+        vmax = None
+
+    im1 = ax_left.imshow(
+        I_input,
+        extent=[-axis_ext, axis_ext, -axis_ext, axis_ext],
+        origin="lower",
+        cmap=CMAP,
+        aspect="equal",
+        vmin=0,
+        vmax=vmax,
+    )
+    ax_left.set_title("Input power density")
+    ax_left.set_xlabel("x (radius units)")
+    ax_left.set_ylabel("y (radius units)")
+
+    # draw core circle on left image
+    core_circle_left = Circle(
+        (0, 0),
+        radius,
+        facecolor="none",
+        edgecolor="white",
+        linewidth=1.5,
+        linestyle="--",
+        zorder=5,
+    )
+    ax_left.add_patch(core_circle_left)
+
+    cbar1 = fig.colorbar(im1, ax=ax_left)
+    cbar1.set_label("Power density (arb. units)")
+
+    im = ax.imshow(
+        I_guided,
+        extent=[-axis_ext, axis_ext, -axis_ext, axis_ext],
+        origin="lower",
+        cmap=CMAP,
+        aspect="equal",
+        vmin=0,
+        vmax=vmax,
+    )
+    ax.set_title("Total guided power density")
+    ax.set_xlabel("x (radius units)")
+    ax.set_ylabel("y (radius units)")
+
+    # draw core circle on right image
+    core_circle_right = Circle(
+        (0, 0),
+        radius,
+        facecolor="none",
+        edgecolor="white",
+        linewidth=1.5,
+        linestyle="--",
+        zorder=5,
+    )
+    ax.add_patch(core_circle_right)
+
+    cbar = fig.colorbar(im, ax=ax)
+    cbar.set_label("Power density (arb. units)")
