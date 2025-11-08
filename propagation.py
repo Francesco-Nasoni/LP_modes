@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 
 
 def fiber_propagation(df_coeff, n1, a, lam, z_fiber):

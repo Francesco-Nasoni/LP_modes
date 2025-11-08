@@ -19,6 +19,8 @@ from propagation import (
     free_propagate_asm_scalar_aliasing_robust,
 )
 
+from hybrid_propagation import free_propagate_asm_scalar_hybrid
+
 from graph import plot_summary_figure
 
 # --------------------------------------- PARAMETERS ----------------------------------------------
@@ -30,7 +32,7 @@ FIBER_V = 6.3
 MODES_TO_TEST = [(0, 1), (0, 2), (1, 1), (1, 2), (2, 1), (3, 1)]
 FIBER_N1 = 1.4
 FIBER_LENGTH = 1e4
-DIST_FROM_FIBER = 50
+DIST_FROM_FIBER = 3000
 
 # --- Injected field parameters ---
 LAMBDA = 0.0426                 # Wavelength of the injected beam
@@ -180,10 +182,10 @@ I_guided_prop = np.abs(E_guided_x_prop) ** 2 + np.abs(E_guided_y_prop) ** 2
 
 
 # --- PROPAGATE THE FIELD USING ASM TO z=DIST_FROM_FIBER ---
-E_propagated_x, prop_axis_ext = free_propagate_asm_scalar_aliasing_robust(
+E_propagated_x, prop_axis_ext = free_propagate_asm_scalar_hybrid(
     E_guided_x_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA
 )
-E_propagated_y, _ = free_propagate_asm_scalar_aliasing_robust(
+E_propagated_y, _ = free_propagate_asm_scalar_hybrid(
     E_guided_y_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA
 )
 
