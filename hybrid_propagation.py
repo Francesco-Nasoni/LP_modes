@@ -83,7 +83,8 @@ def free_propagate_fraunhofer_scalar(E_component_in, z, L_in, lambda_0):
     N = E_component_in.shape[0]
     k0 = 2 * np.pi / lambda_0
     dx_in = L_in / N
-    L_out = (lambda_0 * z) / dx_in
+    # L_out is determined by physics (FFT properties)
+    L_out = (lambda_0 * z) / dx_in 
     dx_out = L_out / N 
     x_v_out = np.linspace(-L_out / 2, L_out / 2 - dx_out, N)
     X_out, Y_out = np.meshgrid(x_v_out, x_v_out)
@@ -108,16 +109,16 @@ def free_propagate_asm_scalar_hybrid(
     Rz_factor=1,
     asm_fresnel_threshold=0.528, # z_th_1 = 400
     fraunhofer_threshold=0.1,    # z_th_2 = 2112
-    N_pad_limit=10000,           # Max grid size for padding
+    N_pad_limit=11000,           # Max grid size for padding
     verbose=True
 ):
     """
     Perform scalar free-space propagation using a 3-stage hybrid method.
     
-    *** MODIFIED LOGIC ***
-    Stage 3 (Fraunhofer) now applies zero-padding to the input field
-    up to N_pad_limit to ensure sufficient sampling resolution
-    in the far-field (output) domain.
+    *** MODIFIED LOGIC (Fraunhofer) ***
+    1. Padding logic uses 'dx_match' (prevents undersampling),
+       capped at N_pad_limit (default 11000).
+    2. Output grid is *then* cropped to a physical size of 2*Rz.
     """
     
     # --- Handle z=0 case (no propagation) ---
@@ -130,56 +131,106 @@ def free_propagate_asm_scalar_hybrid(
     fresnel_number = (L_orig**2) / (lambda_0 * z)
     N_orig = E_component_in.shape[0]
     dx_orig = L_orig / N_orig
+    
+    # --- Calculate R_z (needed for crop in Stage 3 and padding in Stage 1/2) ---
+    R_z = NA * z * Rz_factor
+    
 
     # --- STAGE 3: Far-Field (Fraunhofer) ---
     if fresnel_number < fraunhofer_threshold:
         if verbose:
             print(f"--- Using Fraunhofer propagation (F={fresnel_number:.2e} < {fraunhofer_threshold}) ---")
             
-        # --- FIX: Apply Zero-Padding for Resolution ---
-        # We pad to N_pad_limit to interpolate the far-field
-        # (i.e., get smaller output pixels dx_out)
-        N_pad_fraun = int(N_pad_limit)
+        # --- PADDING LOGIC (dx_match) ---
+        # 1. Calculate N required to match dx_out = dx_orig
+        N_pad_ideal_for_dx_match = int(np.ceil((lambda_0 * z) / (dx_orig**2)))
+        
+        # ++++++++++
+        #  FIX: Removed N_max_fraun, using N_pad_limit directly
+        # ++++++++++
+        if N_pad_ideal_for_dx_match <= N_pad_limit:
+            N_pad_fraun = N_pad_ideal_for_dx_match
+        else:
+            N_pad_fraun = N_pad_limit
+        
+        N_pad_fraun = int(max(N_pad_fraun, N_orig))
+        
+        if verbose:
+            print(f"--- (dx_match logic: N_ideal={N_pad_ideal_for_dx_match}, "
+                  f"Capped to N_pad={N_pad_fraun} by N_pad_limit) ---")
+        # --- END PADDING ---
         
         if N_pad_fraun <= N_orig:
-            # No padding needed or requested
             E_in_fraun = E_component_in
             L_in_fraun = L_orig
         else:
-            if verbose:
-                print(f"--- (Zero-padding input from N={N_orig} to N_pad={N_pad_fraun} for resolution) ---")
+            # Perform standard zero-padding
             start_idx = (N_pad_fraun - N_orig) // 2
             end_idx = start_idx + N_orig
             E_in_fraun = np.zeros((N_pad_fraun, N_pad_fraun), dtype=complex)
             E_in_fraun[start_idx:end_idx, start_idx:end_idx] = E_component_in
-            # The physical size of the *input grid* increases
             L_in_fraun = N_pad_fraun * dx_orig
             
-        # Call kernel with padded input
-        E_out, L_out = free_propagate_fraunhofer_scalar(
-            E_in_fraun, # <-- Padded input field
+        # Call kernel with (dynamically) padded input
+        E_out_padded, L_out = free_propagate_fraunhofer_scalar(
+            E_in_fraun, 
             z,
-            L_in_fraun, # <-- New larger input grid size
+            L_in_fraun,
             lambda_0
         )
-        # L_out will be the same, but E_out is now N_pad_fraun x N_pad_fraun
-        return E_out, L_out / 2
+        
+        # --- CROPPING LOGIC (Per user request: Rz x Rz) ---
+        # We interpret "Rz x Rz" as a window of total width 2*Rz
+        
+        # 1. Find output sample spacing
+        dx_out = L_out / N_pad_fraun
+        
+        # 2. Define target crop size (physical)
+        L_crop_target = 2 * R_z 
+        
+        # 3. Find target crop size (pixels)
+        N_crop = int(np.ceil(L_crop_target / dx_out))
+        if N_crop % 2 != 0: N_crop += 1 # Ensure even for centering
+            
+        # 4. Check if crop is necessary (if target is smaller than grid)
+        if N_crop >= N_pad_fraun:
+            if verbose:
+                print(f"--- (Crop target N={N_crop} >= grid N={N_pad_fraun}. "
+                      "Returning full grid.) ---")
+            return E_out_padded, L_out / 2
+        else:
+            # 5. Perform central crop
+            center_idx = N_pad_fraun // 2
+            half_crop = N_crop // 2
+            start = center_idx - half_crop
+            end = center_idx + half_crop
+            
+            E_out_cropped = E_out_padded[start:end, start:end]
+            L_cropped_final = N_crop * dx_out
+            
+            if verbose:
+                print(f"--- (Cropped output to {N_crop}x{N_crop} grid, "
+                      f"L_final={L_cropped_final:.2f}) ---")
+                
+            return E_out_cropped, L_cropped_final / 2
+        
 
     # --- STAGE 1 & 2: Near/Mid-Field (ASM or Fresnel) ---
-    # This is the aliasing-prevention block from before
     else:
         # --- Start Padding Logic (for aliasing) ---
-        R_z = NA * z * Rz_factor
         L_pad_ideal = max(L_orig, 2 * R_z)
         dx_pad = dx_orig
         N_pad_ideal = max(N_orig, int(np.ceil(L_pad_ideal / dx_pad)))
+        # ++++++++++
+        #  NOTE: This block now also uses N_pad_limit (default 11000)
+        # ++++++++++
         N_pad = int(min(N_pad_ideal, N_pad_limit))
-        L_pad = N_pad * dx_pad
+        L_pad = N_pad * dx_pad 
 
         if N_pad == N_pad_limit and N_pad_ideal > N_pad_limit:
             warnings.warn(
                 f"Propagation at z={z:.1f} requires N={N_pad_ideal} samples. "
-                f"Clamped to N_pad={N_pad}. "
+                f"Clamped to N_pad={N_pad} by N_pad_limit. "
                 "Result may suffer from aliasing."
             )
         
@@ -226,4 +277,5 @@ def free_propagate_asm_scalar_hybrid(
                 E_in_padded, z, L_pad, lambda_0
             )
         
+        # L_out for ASM/Fresnel is just L_pad
         return E_out_padded, L_pad / 2
