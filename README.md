@@ -13,29 +13,37 @@ It integrates three distinct physical stages:
 The simulation assumes the **weakly-guiding approximation** ($n_{core} \approx n_{clad}$) for a step-index fiber.
 
 ### 1. Modal Decomposition (Coupling)
-The code first solves the scalar Helmholtz equation to find the transverse field profiles of the guided $LP_{lm}$ modes. The input field $\mathbf{E}_{in}$ (a tilted Gaussian beam) is projected onto this orthonormal basis to find the complex coupling coefficients $c_{lm}$:
+The code first solves the scalar Helmholtz equation to find the transverse field profiles of the guided $LP\_{lm}$ modes. The input field $\mathbf{E}\_{in}$ (a tilted Gaussian beam) is projected onto this orthonormal basis to find the complex coupling coefficients $c_{lm}$:
 
-$$c_{lm}(z=0) = \iint \mathbf{E}_{\text{in}} \cdot \mathbf{E}_{lm}^* \, dA$$
+$$c_{lm}(z=0) = \iint \mathbf{E}_{\text{in}} \cdot \mathbf{E}_{lm}^* \\, dA$$
 
-Since the modes are normalized such that $\iint |\mathbf{E}_{lm}|^2 \, dA = 1$, the squared modulus $|c_{lm}|^2$ represents the power coupled into each specific mode.
+Since the modes are normalized such that $\iint |\mathbf{E}\_{lm}|^2 \\, dA = 1$, the squared modulus $|c_{lm}|^2$ represents the power coupled into each specific mode.
 
 ### 2. Fiber Propagation
 Once coupled, the field propagates through a fiber of length $L$. Each mode $LP_{lm}$ has a distinct propagation constant $\beta_{lm}$ derived from the characteristic equation. The coefficients evolve as:
 
 $$c_{lm}(L) = c_{lm}(0) \cdot e^{-j \beta_{lm} L}$$
 
-where $\beta_{lm} = \sqrt{(n_{core}k_0)^2 - (u_{lm}/a)^2}$. This phase slippage between modes causes the spatial intensity profile to change along the fiber (intermodal interference), even though the power distribution among modes remains constant (assuming no losses).
+where $\beta\_{lm} = \sqrt{(n\_{core}k\_0)^2 - (u\_{lm}/a)^2}$. 
+
+This phase slippage between modes causes the spatial intensity profile to change along the fiber (intermodal interference), even though the power distribution among modes remains constant (assuming no losses).
 
 ### 3. Free Space Propagation (ASM)
 The field exiting the fiber, $\mathbf{E}_{out}$, acts as the source for diffraction into free space. The simulation employs the **Angular Spectrum Method (ASM)**, a scalar diffraction technique based on Fourier analysis.
 
 **The Algorithm:**
 1.  **Spectral Decomposition (FFT):** The spatial field $E(x,y,0)$ is decomposed into plane waves:
-    $$A(k_x, k_y; 0) = \mathcal{F}\{E(x,y,0)\}$$
+
+    $$A(k_x, k_y; 0) = \mathcal{F}\\{E(x,y,0)\\}$$
+    
 2.  **Propagation in k-space:** The phase shift transfer function $H(k_x, k_y)$ is applied:
+   
     $$A(k_x, k_y; z) = A(k_x, k_y; 0) \cdot e^{j k_z z}$$
+    
     where $k_z = \sqrt{k_0^2 - k_x^2 - k_y^2}$.
-3.  **Reconstruction (IFFT):** The propagated field is recovered via Inverse FFT.
+4.  **Reconstruction (IFFT):** The propagated field is recovered via Inverse FFT:
+   
+   $$E(x,y,z)=\mathcal{F}^{-1}\\{A(k_x, k_y; z)\\}$$
 
 **Aliasing Control:**
 The code (`free_propagate_asm_scalar_aliasing_robust`) implements a padding strategy. Since the beam diverges ($\theta \propto \lambda/w_0$), high spatial frequencies can wrap around the FFT grid. The simulation automatically expands the computational grid based on the Numerical Aperture (NA) and propagation distance to prevent these numerical artifacts.
