@@ -17,6 +17,7 @@ from source.LP_projection_functions import (
 from source.propagation import (
     fiber_propagation,
     free_propagate_asm_scalar_aliasing_robust,
+    free_propagation_swag
 )
 
 from source.graph import plot_summary_figure
@@ -30,8 +31,8 @@ FIBER_V = 5.8
 MODES_TO_TEST = [(0, 1), (0, 2), (1, 1), (1, 2), (2, 1), (3, 1)]
 FIBER_N1 = 1.4
 FIBER_LENGTH = 1.1e4
-DIST_FROM_FIBER = 300
-RZ_FACTOR = 1.2
+DIST_FROM_FIBER = 700
+RZ_FACTOR = 1
 
 # --- Injected field parameters ---
 LAMBDA = 0.0426                 # Wavelength of the injected beam
@@ -47,7 +48,7 @@ POLARIZATION_ANGLE = 0    # Polarization angle of the beam (angle of the electri
 
 # --- Grid stuff ---
 AXIS_SIZE = 1.2
-GRID_SIZE = 400
+GRID_SIZE = 500
 
 # --- Visualization stuff ---
 # Colormap name passed to matplotlib for the power density plots
@@ -181,11 +182,26 @@ I_guided_prop = np.abs(E_guided_x_prop) ** 2 + np.abs(E_guided_y_prop) ** 2
 
 
 # --- PROPAGATE THE FIELD USING ASM TO z=DIST_FROM_FIBER ---
-E_propagated_x, prop_axis_ext = free_propagate_asm_scalar_aliasing_robust(
-    E_guided_x_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA, RZ_FACTOR
-)
-E_propagated_y, _ = free_propagate_asm_scalar_aliasing_robust(
-    E_guided_y_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA, RZ_FACTOR
+
+# ! LEGACY
+# E_propagated_x, prop_axis_ext = free_propagate_asm_scalar_aliasing_robust(
+#     E_guided_x_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA, RZ_FACTOR
+# )
+# E_propagated_y, _ = free_propagate_asm_scalar_aliasing_robust(
+#     E_guided_y_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA, RZ_FACTOR
+# )
+
+E_propagated_x, E_propagated_y, prop_axis_ext = free_propagation_swag(
+    guided_modes,
+    df_coeff_fib_prop,
+    DIST_FROM_FIBER,
+    NA,
+    RZ_FACTOR,
+    GRID_SIZE,
+    int(1e4),
+    FIBER_V,
+    radius,
+    LAMBDA,
 )
 
 if E_propagated_x is not None:
