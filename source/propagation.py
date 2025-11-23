@@ -97,9 +97,9 @@ def free_propagate_asm_scalar_aliasing_robust(E_component_in, z, L_orig, lambda_
     L_pad = max(L_orig, 2*R_z)
 
     # maintain approximately same dx if possible
-    # here the maximum 1e4x1e4 require peak 9.6GB of ram
+    # here the maximum 1.5e4x1.5e4 require peak 9.6GB of ram
     N_pad = int(L_pad/dx)
-    if N_pad > 1.2e4:
+    if N_pad > 1.5e4:
         print(f"Propagation distance z={z} requires too many resources (N_pad = {N_pad})")
         return None, None
 
@@ -129,9 +129,9 @@ def free_propagate_asm_scalar_aliasing_robust(E_component_in, z, L_orig, lambda_
 
 
 
-def free_propagation_swag(guided_modes, df_coeff, z, NA, Rz_factor, N_x, N_k, fiber_V, radius=1.0, lambda_0=1.0):
+def free_propagation_asm_hankel(guided_modes, df_coeff, z, NA, Rz_factor, N_x, fiber_V, R_origin, min_point_per_period=10, radius=1.0, lambda_0=1.0):
     from scipy.special import jv, kn
-    from scipy.integrate import simpson
+    from scipy.integrate import simpson, trapezoid
 
     def analytical_hankel_core(l, u, a, k_grid):
         """
@@ -191,6 +191,7 @@ def free_propagation_swag(guided_modes, df_coeff, z, NA, Rz_factor, N_x, N_k, fi
     
     # Coordinates in position space
     R_z = NA * z * Rz_factor
+    R_z = max(R_origin, R_z)
     x = np.linspace(-R_z, R_z, N_x)
     y = np.linspace(-R_z, R_z, N_x)
     X, Y = np.meshgrid(x, y)
@@ -201,6 +202,17 @@ def free_propagation_swag(guided_modes, df_coeff, z, NA, Rz_factor, N_x, N_k, fi
     # Since we are not using fft we can use as many point as we want
     k0 = 2 * np.pi / lambda_0
     k_max = k0 * 2 + 10/radius  # Go slightly beyond k0 to capture evanescent tails
+
+    #* Calculating N_k to have {min_point_per_period} point per period for k_max
+    # Asymptotic J_l(ax) ~ cos (ax + φ) -> λ=2π/a
+    # Max period when calculating Hankel transform
+    #   R_max = R_z * √2  (accounting for the corners)
+    #   λ_max = 2π/R_max 
+    #   Δx =  λ_max/min_point_per_period = 2π/R_max/min_point_per_period
+    #   N_k = (k_max / Δx)
+    
+    N_k = int(np.ceil(k_max / (2*np.pi/R_z/np.sqrt(2)/min_point_per_period)))
+    print(f"Hankel transforms will be applaied to {N_k} k-points")
     k_grid = np.linspace(1e-5, k_max, N_k)
 
     # --- 3. Pre-cooked ropagator (1D) ---

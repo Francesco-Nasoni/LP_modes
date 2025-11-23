@@ -17,10 +17,11 @@ from source.LP_projection_functions import (
 from source.propagation import (
     fiber_propagation,
     free_propagate_asm_scalar_aliasing_robust,
-    free_propagation_swag
+    free_propagation_asm_hankel
 )
 
 from source.graph import plot_summary_figure
+import time
 
 # --------------------------------------- PARAMETERS ----------------------------------------------
 # -------------------------------------------------------------------------------------------------
@@ -31,7 +32,7 @@ FIBER_V = 5.8
 MODES_TO_TEST = [(0, 1), (0, 2), (1, 1), (1, 2), (2, 1), (3, 1)]
 FIBER_N1 = 1.4
 FIBER_LENGTH = 1.1e4
-DIST_FROM_FIBER = 700
+DIST_FROM_FIBER = 800
 RZ_FACTOR = 1
 
 # --- Injected field parameters ---
@@ -165,6 +166,7 @@ print(f"Coupling efficiency = {eta:.3f}")
 print("*" * 50 + "\n")
 
 
+# --- CALCULATE THE COEFFICIENTS AFTER THE PROPAGATION INSIDE THE FIBER ---
 df_coeff_fib_prop = fiber_propagation(
     df_coeff,
     n1=FIBER_N1,
@@ -183,7 +185,7 @@ I_guided_prop = np.abs(E_guided_x_prop) ** 2 + np.abs(E_guided_y_prop) ** 2
 
 # --- PROPAGATE THE FIELD USING ASM TO z=DIST_FROM_FIBER ---
 
-# ! LEGACY
+#! LEGACY
 # E_propagated_x, prop_axis_ext = free_propagate_asm_scalar_aliasing_robust(
 #     E_guided_x_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA, RZ_FACTOR
 # )
@@ -191,24 +193,32 @@ I_guided_prop = np.abs(E_guided_x_prop) ** 2 + np.abs(E_guided_y_prop) ** 2
 #     E_guided_y_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA, RZ_FACTOR
 # )
 
-E_propagated_x, E_propagated_y, prop_axis_ext = free_propagation_swag(
+#* NEW METOD
+start_time = time.time()
+
+E_propagated_x, E_propagated_y, prop_axis_ext = free_propagation_asm_hankel(
     guided_modes,
     df_coeff_fib_prop,
     DIST_FROM_FIBER,
     NA,
     RZ_FACTOR,
     GRID_SIZE,
-    int(1e4),
     FIBER_V,
-    radius,
-    LAMBDA,
+    axis_ext,
+    min_point_per_period=10,
+    radius=radius,
+    lambda_0=LAMBDA,
 )
+
+end_time = time.time()
+print(f"Time taken for free_propagation: {end_time - start_time:.4f} seconds")
 
 if E_propagated_x is not None:
     I_propagated = np.abs(E_propagated_x) ** 2 + np.abs(E_propagated_y) ** 2
+    dA_prop = (2*prop_axis_ext/E_propagated_x.shape[0])**2
 
     print("\n", "PROPAGATED FIELD POWER", "\n" + "*" * 50)
-    print(f"Power of the propagated field = {np.sum(I_propagated) * dA:.3f}")
+    print(f"Power of the propagated field = {np.sum(I_propagated) * dA_prop:.3f}")
     print("*" * 50 + "\n")
 else:
     I_propagated = np.zeros_like(np.real(E_guided_x_prop))
