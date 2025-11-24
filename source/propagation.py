@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+
 def fiber_propagation(df_coeff, n1, a, lam, z_fiber):
     """
     Computes the fiber propagation by applying phase factors to the coefficients.
@@ -71,10 +72,12 @@ def free_propagate_asm_scalar(E_component_in, z, L, lambda_0):
     return E_out
 
 
-def free_propagate_asm_scalar_aliasing_robust(E_component_in, z, L_orig, lambda_0, NA, Rz_factor = 1):
+def free_propagate_asm_scalar_aliasing_robust(
+    E_component_in, z, L_orig, lambda_0, NA, Rz_factor=1
+):
     """
-    Perform aliasing-robust scalar angular spectrum method (ASM) free-space 
-    propagation of a 2D complex field. This method pads the input field to 
+    Perform aliasing-robust scalar angular spectrum method (ASM) free-space
+    propagation of a 2D complex field. This method pads the input field to
     reduce aliasing effects during propagation.
 
     Parameters:
@@ -85,7 +88,7 @@ def free_propagate_asm_scalar_aliasing_robust(E_component_in, z, L_orig, lambda_
         NA (float): Numerical aperture.
 
     Returns:
-        tuple: 
+        tuple:
             - E_out_cropped (np.ndarray): Cropped output 2D complex field.
             - float: Half of the physical size of the output field.
     """
@@ -94,13 +97,15 @@ def free_propagate_asm_scalar_aliasing_robust(E_component_in, z, L_orig, lambda_
     dx = L_orig / N_orig
 
     R_z = NA * z * Rz_factor
-    L_pad = max(L_orig, 2*R_z)
+    L_pad = max(L_orig, 2 * R_z)
 
     # maintain approximately same dx if possible
     # here the maximum 1.5e4x1.5e4 require peak 9.6GB of ram
-    N_pad = int(L_pad/dx)
+    N_pad = int(L_pad / dx)
     if N_pad > 1.5e4:
-        print(f"Propagation distance z={z} requires too many resources (N_pad = {N_pad})")
+        print(
+            f"Propagation distance z={z} requires too many resources (N_pad = {N_pad})"
+        )
         return None, None
 
     # Find the center index
@@ -111,62 +116,70 @@ def free_propagate_asm_scalar_aliasing_robust(E_component_in, z, L_orig, lambda_
     E_in_padded = np.zeros((N_pad, N_pad), dtype=complex)
     E_in_padded[start_idx:end_idx, start_idx:end_idx] = E_component_in
 
-    E_out_padded = free_propagate_asm_scalar(
-        E_in_padded, 
-        z, 
-        L_pad,
-        lambda_0
-    )
+    E_out_padded = free_propagate_asm_scalar(E_in_padded, z, L_pad, lambda_0)
 
     # Crop the output field to the region of interest
-    crop_start_idx = max(0, (N_pad // 2) - int(L_pad/2 / dx))
-    crop_end_idx = min(N_pad, (N_pad // 2) + int(L_pad/2 / dx))
+    crop_start_idx = max(0, (N_pad // 2) - int(L_pad / 2 / dx))
+    crop_end_idx = min(N_pad, (N_pad // 2) + int(L_pad / 2 / dx))
 
-    E_out_cropped = E_out_padded[crop_start_idx:crop_end_idx, crop_start_idx:crop_end_idx]
+    E_out_cropped = E_out_padded[
+        crop_start_idx:crop_end_idx, crop_start_idx:crop_end_idx
+    ]
     L_out = E_out_cropped.shape[0] * dx
 
-    return E_out_cropped, L_out/2
+    return E_out_cropped, L_out / 2
 
 
-
-def free_propagation_asm_hankel(guided_modes, df_coeff, z, NA, Rz_factor, N_x, fiber_V, R_origin, min_point_per_period=10, radius=1.0, lambda_0=1.0):
+def free_propagation_asm_hankel(
+    guided_modes,
+    df_coeff,
+    z,
+    NA,
+    Rz_factor,
+    N_x,
+    fiber_V,
+    R_origin,
+    min_point_per_period=10,
+    radius=1.0,
+    lambda_0=1.0,
+):
     from scipy.special import jv, kn
     from scipy.integrate import simpson, trapezoid
 
-    def analytical_hankel_core(l, u, a, k_grid):
+    def analytical_hankel_core(l, u, a, k):
         """
         Analytical Hankel Transform of the Core field (J_l) from 0 to a.
         Uses the finite Lommel Integral.
         """
-        U = u / a
-        
+        h = u / a
+
         # Denominator: u^2 - k^2
         # Handle singularity at k = u/a with a small epsilon
-        denom = U**2 - k_grid**2
+        denom = h**2 - k**2
         denom[np.abs(denom) < 1e-12] = 1e-12
-        
-        # Formula: (a / (u^2-k^2)) * [ u*J_{l+1}(ua)*J_l(ka) - k*J_l(ua)*J_{l+1}(ka) ]
+
+        # Formula: (a / (h^2-k^2)) * [ u*J_{l+1}(ha)*J_l(ka) - k*J_l(ha)*J_{l+1}(ka) ]
         term = (a / denom) * (
-            U * jv(l + 1, U * a) * jv(l, k_grid * a) 
-            - k_grid * jv(l, U * a) * jv(l + 1, k_grid * a)
+            h * jv(l + 1, u) * jv(l, k * a)
+            - k * jv(l, u) * jv(l + 1, k * a)
         )
         return term
 
-    def analytical_hankel_cladding(l, w, a, k_grid):
+    def analytical_hankel_cladding(l, w, a, k):
         """
         Analytical Hankel Transform of the Cladding field (K_l) from a to infinity.
         Uses the Lommel Integral adapted for K functions.
-        
+
         """
-        gamma = w / a
-        
-        # Denominator: w^2 + k^2
-        denom = gamma**2 + k_grid**2
-        
+        q = w / a
+
+        # Denominator: q^2 + k^2
+        denom = q**2 + k**2
+
         # Formula: (a / (w^2+k^2)) * [ w/a * J_l(ka) * K_{l+1}(w) - k * J_{l+1}(ka) * K_l(w) ]
         term = (a / denom) * (
-            gamma * jv(l, k_grid * a) * kn(l + 1, w) 
-            - k_grid * jv(l + 1, k_grid * a) * kn(l, w)
+            q * jv(l, k * a) * kn(l + 1, w)
+            - k * jv(l + 1, k * a) * kn(l, w)
         )
         return term
 
@@ -176,19 +189,19 @@ def free_propagation_asm_hankel(guided_modes, df_coeff, z, NA, Rz_factor, N_x, f
         for the spatial mode profile R(r).
         """
         # Core Integral: Int(J_l^2(ur/a) r dr) from 0 to a
-        int_core = (a**2 / 2) * (jv(l, u)**2 - jv(l-1, u) * jv(l+1, u))
-        
+        int_core = (a**2 / 2) * (jv(l, u) ** 2 - jv(l - 1, u) * jv(l + 1, u))
+
         # Cladding Integral: Int(K_l^2(wr/a) r dr) from a to inf
-        int_clad = (a**2 / 2) * (kn(l-1, w) * kn(l+1, w) - kn(l, w)**2)
-        
+        int_clad = (a**2 / 2) * (kn(l - 1, w) * kn(l + 1, w) - kn(l, w) ** 2)
+
         # Continuity factor B at interface: J_l(u) / K_l(w)
         B = jv(l, u) / kn(l, w)
-        
+
         # Total Power = 2*pi * (Core_Int + B^2 * Clad_Int)
         total_norm_sq = 2 * np.pi * (int_core + B**2 * int_clad)
-        
+
         return np.sqrt(total_norm_sq)
-    
+
     # Coordinates in position space
     R_z = NA * z * Rz_factor
     R_z = max(R_origin, R_z)
@@ -201,17 +214,19 @@ def free_propagation_asm_hankel(guided_modes, df_coeff, z, NA, Rz_factor, N_x, f
     # Coordinate in k_space
     # Since we are not using fft we can use as many point as we want
     k0 = 2 * np.pi / lambda_0
-    k_max = k0 * 2 + 10/radius  # Go slightly beyond k0 to capture evanescent tails
+    k_max = max(
+        k0 * 4 * NA, 10 / radius
+    )
 
-    #* Calculating N_k to have {min_point_per_period} point per period for k_max
+    # * Calculating N_k to have {min_point_per_period} point per period for k_max
     # Asymptotic J_l(ax) ~ cos (ax + φ) -> λ=2π/a
     # Max period when calculating Hankel transform
     #   R_max = R_z * √2  (accounting for the corners)
-    #   λ_max = 2π/R_max 
+    #   λ_max = 2π/R_max
     #   Δx =  λ_max/min_point_per_period = 2π/R_max/min_point_per_period
     #   N_k = (k_max / Δx)
-    
-    N_k = int(np.ceil(k_max / (2*np.pi/R_z/np.sqrt(2)/min_point_per_period)))
+
+    N_k = int(np.ceil(k_max / (2 * np.pi / R_z / np.sqrt(2) / min_point_per_period)))
     print(f"Hankel transforms will be applaied to {N_k} k-points")
     k_grid = np.linspace(1e-5, k_max, N_k)
 
@@ -220,11 +235,11 @@ def free_propagation_asm_hankel(guided_modes, df_coeff, z, NA, Rz_factor, N_x, f
     kz_sq = (k0**2 - k_grid**2).astype(complex)
     kz = np.sqrt(kz_sq)
     propagator = np.exp(1j * kz * z)
-    
+
     # --- 4. Accumulate Fields ---
     E_final_x = np.zeros_like(R, dtype=complex)
     E_final_y = np.zeros_like(R, dtype=complex)
-    
+
     # Pre-compute a 1D radial axis for interpolation (speed optimization)
     r_1d = np.linspace(0, R_z * np.sqrt(2), N_x)
 
@@ -234,7 +249,7 @@ def free_propagation_asm_hankel(guided_modes, df_coeff, z, NA, Rz_factor, N_x, f
 
         l = mode["l"]
         m = mode["m"]
-        u = mode['u']
+        u = mode["u"]
         w = np.sqrt(fiber_V**2 - u**2)
 
         coeffs = df_coeff.loc[l, m]
@@ -268,26 +283,13 @@ def free_propagation_asm_hankel(guided_modes, df_coeff, z, NA, Rz_factor, N_x, f
         # --- Reconstruct Angular Dependence & Polarization ---
         ang_p = np.exp(1j * l * PHI)
         ang_m = np.exp(-1j * l * PHI)
-        
+
         # Add contributions to X and Y fields
-        E_final_x += field_envelope * (coeffs["x_p_phi"] * ang_p + coeffs["x_m_phi"] * ang_m)
-        E_final_y += field_envelope * (coeffs["y_p_phi"] * ang_p + coeffs["y_m_phi"] * ang_m)
-    
+        E_final_x += field_envelope * (
+            coeffs["x_p_phi"] * ang_p + coeffs["x_m_phi"] * ang_m
+        )
+        E_final_y += field_envelope * (
+            coeffs["y_p_phi"] * ang_p + coeffs["y_m_phi"] * ang_m
+        )
+
     return E_final_x, E_final_y, R_z
-
-
-
-
-
-
-
-
-
-       
-
-
-
-        
-
-
-

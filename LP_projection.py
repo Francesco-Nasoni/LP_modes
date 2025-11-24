@@ -30,26 +30,26 @@ import time
 # --- Various Parameters ---
 FIBER_V = 5.8
 MODES_TO_TEST = [(0, 1), (0, 2), (1, 1), (1, 2), (2, 1), (3, 1)]
-FIBER_N1 = 1.4
-FIBER_LENGTH = 1.1e4
+FIBER_N1 = 1
+FIBER_LENGTH = 1.e4
 DIST_FROM_FIBER = 800
-RZ_FACTOR = 1
+RZ_FACTOR = 1.25
 
 # --- Injected field parameters ---
 LAMBDA = 0.0426                 # Wavelength of the injected beam
 DIST_TO_WAIST = 0               # Distance from the beam waist to the fiber input plane
-W0_X = 1                      # Beam waist size along the x-axis
-W0_Y = 1.1                       # Beam waist size along the y-axis
-X0 = -0                        # x-coordinate of the beam's incidence point on the fiber input plane
-Y0 = -0                        # y-coordinate of the beam's incidence point on the fiber input plane
-ROLL_ANGLE = 0 * np.pi / 180    # Roll angle of the beam (rotation about the z-axis, in radians)
-PITCH_ANGLE = 0.7 * np.pi / 180   # Pitch angle of the beam (tilt in the x-z plane, in radians)
+W0_X = 0.6                      # Beam waist size along the x-axis
+W0_Y = 0.7                       # Beam waist size along the y-axis
+X0 = -0.2                        # x-coordinate of the beam's incidence point on the fiber input plane
+Y0 = -0.1                        # y-coordinate of the beam's incidence point on the fiber input plane
+ROLL_ANGLE = -0 * np.pi / 180    # Roll angle of the beam (rotation about the z-axis, in radians)
+PITCH_ANGLE = 0 * np.pi / 180   # Pitch angle of the beam (tilt in the x-z plane, in radians)
 YAW_ANGLE = 0 * np.pi / 180     # Yaw angle of the beam (tilt in the y-z plane, in radians)
 POLARIZATION_ANGLE = 0    # Polarization angle of the beam (angle of the electric field vector, in radians)
 
 # --- Grid stuff ---
-AXIS_SIZE = 1.2
-GRID_SIZE = 500
+AXIS_SIZE = 1.3
+GRID_SIZE = 1000
 
 # --- Visualization stuff ---
 # Colormap name passed to matplotlib for the power density plots
