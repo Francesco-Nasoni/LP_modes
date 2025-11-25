@@ -1,11 +1,8 @@
-import numpy as np
 import matplotlib.pyplot as plt
-
 from pathlib import Path
-from matplotlib.patches import Circle
-from scipy.special import jv, kn, jn_zeros
-from scipy.optimize import root_scalar
+import numpy as np
 import pandas as pd
+import time
 
 from source.LP_projection_functions import (
     get_guided_modes,
@@ -20,7 +17,6 @@ from source.propagation import (
 )
 
 from source.graph import plot_summary_figure
-import time
 
 # --------------------------------------- PARAMETERS ----------------------------------------------
 # -------------------------------------------------------------------------------------------------
