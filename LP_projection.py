@@ -16,10 +16,11 @@ from source.LP_projection_functions import (
 
 from source.propagation import (
     fiber_propagation,
-    free_propagate_asm_scalar_aliasing_robust,
+    free_propagation_asm_hankel
 )
 
 from source.graph import plot_summary_figure
+import time
 
 # --------------------------------------- PARAMETERS ----------------------------------------------
 # -------------------------------------------------------------------------------------------------
@@ -28,26 +29,26 @@ from source.graph import plot_summary_figure
 # --- Various Parameters ---
 FIBER_V = 5.8
 MODES_TO_TEST = [(0, 1), (0, 2), (1, 1), (1, 2), (2, 1), (3, 1)]
-FIBER_N1 = 1.4
-FIBER_LENGTH = 1.1e4
-DIST_FROM_FIBER = 300
-RZ_FACTOR = 1.2
+FIBER_N1 = 1
+FIBER_LENGTH = 1.e4
+DIST_FROM_FIBER = 800
+RZ_FACTOR = 1.25
 
 # --- Injected field parameters ---
 LAMBDA = 0.0426                 # Wavelength of the injected beam
 DIST_TO_WAIST = 0               # Distance from the beam waist to the fiber input plane
-W0_X = 1                      # Beam waist size along the x-axis
-W0_Y = 1.1                       # Beam waist size along the y-axis
-X0 = -0                        # x-coordinate of the beam's incidence point on the fiber input plane
-Y0 = -0                        # y-coordinate of the beam's incidence point on the fiber input plane
-ROLL_ANGLE = 0 * np.pi / 180    # Roll angle of the beam (rotation about the z-axis, in radians)
-PITCH_ANGLE = 0.7 * np.pi / 180   # Pitch angle of the beam (tilt in the x-z plane, in radians)
+W0_X = 0.6                      # Beam waist size along the x-axis
+W0_Y = 0.7                       # Beam waist size along the y-axis
+X0 = -0.2                        # x-coordinate of the beam's incidence point on the fiber input plane
+Y0 = -0.1                        # y-coordinate of the beam's incidence point on the fiber input plane
+ROLL_ANGLE = -0 * np.pi / 180    # Roll angle of the beam (rotation about the z-axis, in radians)
+PITCH_ANGLE = 0 * np.pi / 180   # Pitch angle of the beam (tilt in the x-z plane, in radians)
 YAW_ANGLE = 0 * np.pi / 180     # Yaw angle of the beam (tilt in the y-z plane, in radians)
 POLARIZATION_ANGLE = 0    # Polarization angle of the beam (angle of the electric field vector, in radians)
 
 # --- Grid stuff ---
-AXIS_SIZE = 1.2
-GRID_SIZE = 400
+AXIS_SIZE = 1.3
+GRID_SIZE = 1000
 
 # --- Visualization stuff ---
 # Colormap name passed to matplotlib for the power density plots
@@ -164,6 +165,7 @@ print(f"Coupling efficiency = {eta:.3f}")
 print("*" * 50 + "\n")
 
 
+# --- CALCULATE THE COEFFICIENTS AFTER THE PROPAGATION INSIDE THE FIBER ---
 df_coeff_fib_prop = fiber_propagation(
     df_coeff,
     n1=FIBER_N1,
@@ -181,18 +183,31 @@ I_guided_prop = np.abs(E_guided_x_prop) ** 2 + np.abs(E_guided_y_prop) ** 2
 
 
 # --- PROPAGATE THE FIELD USING ASM TO z=DIST_FROM_FIBER ---
-E_propagated_x, prop_axis_ext = free_propagate_asm_scalar_aliasing_robust(
-    E_guided_x_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA, RZ_FACTOR
+start_time = time.time()
+
+E_propagated_x, E_propagated_y, prop_axis_ext = free_propagation_asm_hankel(
+    guided_modes,
+    df_coeff_fib_prop,
+    DIST_FROM_FIBER,
+    NA,
+    RZ_FACTOR,
+    GRID_SIZE,
+    FIBER_V,
+    axis_ext,
+    min_point_per_period=10,
+    radius=radius,
+    lambda_0=LAMBDA,
 )
-E_propagated_y, _ = free_propagate_asm_scalar_aliasing_robust(
-    E_guided_y_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA, RZ_FACTOR
-)
+
+end_time = time.time()
+print(f"Time taken for free_propagation: {end_time - start_time:.4f} seconds")
 
 if E_propagated_x is not None:
     I_propagated = np.abs(E_propagated_x) ** 2 + np.abs(E_propagated_y) ** 2
+    dA_prop = (2*prop_axis_ext/E_propagated_x.shape[0])**2
 
     print("\n", "PROPAGATED FIELD POWER", "\n" + "*" * 50)
-    print(f"Power of the propagated field = {np.sum(I_propagated) * dA:.3f}")
+    print(f"Power of the propagated field = {np.sum(I_propagated) * dA_prop:.3f}")
     print("*" * 50 + "\n")
 else:
     I_propagated = np.zeros_like(np.real(E_guided_x_prop))
