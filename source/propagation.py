@@ -36,14 +36,35 @@ def free_propagation_asm_hankel(
     z,
     NA,
     Rz_factor,
-    N_x,
+    N_x_min,
     fiber_V,
     R_origin,
     min_point_per_period=10,
     radius=1.0,
     lambda_0=1.0,
 ):
+    """
+    Propagate guided fiber modes using analytical Hankel transforms and ASM.
+    Computes the propagated electric field components (Ex, Ey) at distance z from
+    the fiber end using the Angular Spectrum Method (ASM) with analytical Fourier/Hankel
+    transforms for the spatial mode profiles.
 
+        Args:
+            guided_modes: List of mode dictionaries containing 'l', 'm', 'u' parameters
+            df_coeff: DataFrame with polarization coefficients indexed by (l, m)
+            z: Propagation distance
+            NA: Numerical aperture of the fiber
+            Rz_factor: Scaling factor for transverse grid size
+            N_x_min: Minimum number of grid points in x and y
+            fiber_V: V-number of the fiber
+            R_origin: Minimum allowed grid radius
+            min_point_per_period: Minimum sampling points per Bessel oscillation (default: 10)
+            radius: Fiber core radius (default: 1.0)
+            lambda_0: Wavelength (default: 1.0)
+        Returns:
+            tuple: (E_final_x, E_final_y, R_z) - Complex field arrays and grid radius
+    """
+    
     def analytical_hankel_core(l, u, a, k):
         """
         Analytical Hankel Transform of the Core field (J_l) from 0 to a.
@@ -103,8 +124,22 @@ def free_propagation_asm_hankel(
     # Coordinates in position space
     R_z = NA * z * Rz_factor
     R_z = max(R_origin, R_z)
-    x = np.linspace(-R_z, R_z, N_x)
-    y = np.linspace(-R_z, R_z, N_x)
+
+    # --- DYNAMIC GRID CALCULATION ---
+    # Nyquist criterion: dx < lambda / (2 * NA), we use an oversampling factor of 4
+    oversampling = 4.0 
+    required_dx = lambda_0 / (2 * NA * oversampling)
+    min_Nx_required = int(np.ceil((2 * R_z) / required_dx))
+    N_x_eff = max(N_x_min, min_Nx_required)
+    
+    # Check if N_x_eff is becoming dangerously large for memory
+    if N_x_eff > 20000:
+        print(f"Warning: Large grid required ({N_x_eff} points) to resolve phase at z={z}.")
+
+    print(f"Popagated field grid size: {N_x_eff} x {N_x_eff} points in real space (dx = {2*R_z/N_x_eff:.6f})")
+
+    x = np.linspace(-R_z, R_z, N_x_eff)
+    y = np.linspace(-R_z, R_z, N_x_eff)
     X, Y = np.meshgrid(x, y)
     R = np.sqrt(X**2 + Y**2)
     PHI = np.arctan2(Y, X)
@@ -125,10 +160,10 @@ def free_propagation_asm_hankel(
     #   N_k = (k_max / Δx)
 
     N_k = int(np.ceil(k_max / (2 * np.pi / R_z / np.sqrt(2) / min_point_per_period)))
-    print(f"Hankel transforms will be applaied to {N_k} k-points")
+    print(f"Hankel transforms will be aplied to {N_k} k-points")
     k_grid = np.linspace(1e-5, k_max, N_k)
 
-    # --- 3. Pre-cooked ropagator (1D) ---
+    # --- 3. Pre-cooked propagator (1D) ---
     # H(k) = exp(i * z * sqrt(k0^2 - k^2))
     kz_sq = (k0**2 - k_grid**2).astype(complex)
     kz = np.sqrt(kz_sq)
@@ -139,7 +174,7 @@ def free_propagation_asm_hankel(
     E_final_y = np.zeros_like(R, dtype=complex)
 
     # Pre-compute a 1D radial axis for interpolation (speed optimization)
-    r_1d = np.linspace(0, R_z * np.sqrt(2), N_x)
+    r_1d = np.linspace(0, R_z * np.sqrt(2), N_x_eff)
 
     for mode in guided_modes:
         if mode is None:

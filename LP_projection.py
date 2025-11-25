@@ -49,6 +49,7 @@ POLARIZATION_ANGLE = 0    # Polarization angle of the beam (angle of the electri
 # --- Grid stuff ---
 AXIS_SIZE = 1.3
 GRID_SIZE = 1000
+MIN_GRID_SIZE_PROPAGATED_FIELD = GRID_SIZE
 
 # --- Visualization stuff ---
 # Colormap name passed to matplotlib for the power density plots
@@ -191,12 +192,12 @@ E_propagated_x, E_propagated_y, prop_axis_ext = free_propagation_asm_hankel(
     DIST_FROM_FIBER,
     NA,
     RZ_FACTOR,
-    GRID_SIZE,
+    MIN_GRID_SIZE_PROPAGATED_FIELD,
     FIBER_V,
     axis_ext,
     min_point_per_period=10,
     radius=radius,
-    lambda_0=LAMBDA,
+    lambda_0=LAMBDA
 )
 
 end_time = time.time()
