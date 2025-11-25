@@ -16,7 +16,6 @@ from source.LP_projection_functions import (
 
 from source.propagation import (
     fiber_propagation,
-    free_propagate_asm_scalar_aliasing_robust,
     free_propagation_asm_hankel
 )
 
