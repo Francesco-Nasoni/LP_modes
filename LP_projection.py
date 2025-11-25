@@ -183,15 +183,6 @@ I_guided_prop = np.abs(E_guided_x_prop) ** 2 + np.abs(E_guided_y_prop) ** 2
 
 
 # --- PROPAGATE THE FIELD USING ASM TO z=DIST_FROM_FIBER ---
-
-#! LEGACY
-# E_propagated_x, prop_axis_ext = free_propagate_asm_scalar_aliasing_robust(
-#     E_guided_x_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA, RZ_FACTOR
-# )
-# E_propagated_y, _ = free_propagate_asm_scalar_aliasing_robust(
-#     E_guided_y_prop, DIST_FROM_FIBER, 2 * axis_ext, LAMBDA, NA, RZ_FACTOR
-# )
-
 #* NEW METOD
 start_time = time.time()
 
