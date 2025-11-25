@@ -183,7 +183,6 @@ I_guided_prop = np.abs(E_guided_x_prop) ** 2 + np.abs(E_guided_y_prop) ** 2
 
 
 # --- PROPAGATE THE FIELD USING ASM TO z=DIST_FROM_FIBER ---
-#* NEW METOD
 start_time = time.time()
 
 E_propagated_x, E_propagated_y, prop_axis_ext = free_propagation_asm_hankel(
