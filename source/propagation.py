@@ -68,7 +68,6 @@ def free_propagation_asm_hankel(
     def analytical_hankel_core(l, u, a, k):
         """
         Analytical Hankel Transform of the Core field (J_l) from 0 to a.
-        Uses the finite Lommel Integral.
         """
         h = u / a
 
@@ -87,7 +86,6 @@ def free_propagation_asm_hankel(
     def analytical_hankel_cladding(l, w, a, k):
         """
         Analytical Hankel Transform of the Cladding field (K_l) from a to infinity.
-        Uses the Lommel Integral adapted for K functions.
 
         """
         q = w / a
@@ -136,7 +134,7 @@ def free_propagation_asm_hankel(
     if N_x_eff > 20000:
         print(f"Warning: Large grid required ({N_x_eff} points) to resolve phase at z={z}.")
 
-    print(f"Popagated field grid size: {N_x_eff} x {N_x_eff} points in real space (dx = {2*R_z/N_x_eff:.6f})")
+    print(f"Propagated field grid size: {N_x_eff} x {N_x_eff} points in real space (dx = {2*R_z/N_x_eff:.6f})")
 
     x = np.linspace(-R_z, R_z, N_x_eff)
     y = np.linspace(-R_z, R_z, N_x_eff)
@@ -160,7 +158,7 @@ def free_propagation_asm_hankel(
     #   N_k = (k_max / Δx)
 
     N_k = int(np.ceil(k_max / (2 * np.pi / R_z / np.sqrt(2) / min_point_per_period)))
-    print(f"Hankel transforms will be aplied to {N_k} k-points")
+    print(f"Hankel transforms will be applied to {N_k} k-points")
     k_grid = np.linspace(1e-5, k_max, N_k)
 
     # --- 3. Pre-cooked propagator (1D) ---
@@ -190,7 +188,7 @@ def free_propagation_asm_hankel(
         B = jv(l, u) / kn(l, w)
         norm_factor = get_normalization_factor(l, u, w, radius)
 
-        # Analitically computed Hankel transform in the core and in the clad
+        # Analytically computed Hankel transform in the core and in the clad
         F_core = analytical_hankel_core(l, u, radius, k_grid)
         F_clad = analytical_hankel_cladding(l, w, radius, k_grid)
 
